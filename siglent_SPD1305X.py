@@ -18,6 +18,7 @@ class SPD1305X:
     def __init__(self):
         pyvisa.query_delay = 0.05
         self.psu = None
+        self.channel = 1
         rm = pyvisa.ResourceManager()
         for device in rm.list_resources():
             if "SPD13" in device:
@@ -34,12 +35,12 @@ class SPD1305X:
     def online(self) -> bool:
         return self.psu is not None
 
-    def set_voltage(self, channel_number: int, volts: float) -> bool:
+    def set_voltage(self, volts: float, channel_number: int = 1) -> bool:
         """Sets voltage of specified channel
 
         Args:
-            channel_number (int): channel number of psu
             volts (float): volts to set
+            channel_number (int): channel number of psu
 
         Returns:
             bool: if command is successful
@@ -65,7 +66,7 @@ class SPD1305X:
             print("[PSU] No Device Connected")
             return False
 
-    def set_current(self, channel_number: int, current: float) -> bool:
+    def set_current(self, current: float, channel_number: int = 1) -> bool:
         """Sets current of specified channel
 
         Args:
@@ -92,7 +93,7 @@ class SPD1305X:
             print("[PSU] No Device Connected")
             return False
 
-    def turn_on_power(self, channel_number: int) -> bool:
+    def turn_on_power(self, channel_number: int = 1) -> bool:
         """Turns on power to the specified channel
 
         Args:
@@ -111,7 +112,7 @@ class SPD1305X:
             print("[PSU] No Device Connected")
             return False
 
-    def turn_off_power(self, channel_number: int) -> bool:
+    def turn_off_power(self, channel_number: int = 1) -> bool:
         """Turns off power to the specified channel
 
         Args:

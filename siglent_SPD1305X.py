@@ -17,13 +17,14 @@ class SPD1305X:
         self.psu = None
         rm = pyvisa.ResourceManager()
         for device in rm.list_resources():
-            if "SPD1X" in device:
+            if "SPD13" in device:
                 # print("[PSU] PSU found - " + str(device))
                 self.psu = rm.open_resource(device)
                 self.psu.write_termination = "\n"
                 time.sleep(0.05)
                 self.psu.write("*RST")
                 time.sleep(0.05)
+                # print("[PSU] PSU reset - " + str(device))
         if self.psu is None:
             print("[PSU] ERROR - No PSU found")
 
@@ -60,10 +61,11 @@ if __name__ == '__main__':
     psu = SPD1305X()
 
     if not psu.online:
-        print("Cannot find Siglent SPD3303X")
+        print("Cannot find Siglent SPD1305X")
         sys.exit(1)
+    else:
+        print("PSU found")
 
-    print("PSU found")
 
     # channel = None
     # if args.set_channel is not None:

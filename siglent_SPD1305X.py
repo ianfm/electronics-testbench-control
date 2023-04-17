@@ -204,13 +204,13 @@ if __name__ == '__main__':
         print("PSU found")
 
 
-    channel = None
+    channel = 1
     if args.set_channel is not None:
-        if (args.set_channel == 1 or args.set_channel == 2):
+        if (args.set_channel == 1):
             channel = args.set_channel
             print("Channel set to " + str(channel))
         else:
-            print("Invalid channel. Must be 1 or 2")
+            print("Invalid channel. Channel may optionally be specified as 1, but other values are invalid")
     
     if not channel:
         print("No channel")

@@ -46,6 +46,36 @@ class DM3058E:
         else:
             print("[DMM] No Device Connected")
             return False
+        
+    def write_direct(self, command_string : str):
+        """Resets device to factory state
+
+        Returns:
+            bool: [description]
+        """
+        if self.dmm is not None:
+            self.dmm.write(command_string)
+            time.sleep(pyvisa.query_delay)
+            return self.dmm.read_raw(1024).decode("utf-8")
+        else:
+            print("[DMM] No Device Connected")
+            return False
+        
+    def get_command_set(self) -> str:
+        """Retreieves command set currently being used
+
+        #     Returns:
+        #         string: "rigol" | "agilent" | "fluke"
+        #     """
+        if self.dmm is not None:
+            self.dmm.write("CMDSET?")
+            time.sleep(pyvisa.query_delay)
+            reported_configuration = self.dmm.read_raw(1024).decode("utf-8")
+            cmdset = reported_configuration
+            return cmdset
+        else:
+            print("[DMM] No Device Connected")
+            return ""
 
     # def get_configuration(self) -> Tuple[str, float, float]:
     #     """Retreieves configuration of mode, range, and resolution

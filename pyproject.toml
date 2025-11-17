@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=63", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "electronics-testbench-control"
+version = "0.1.0"
+description = "SCPI-based drivers and CLIs for lab test equipment"
+authors = [{ name = "Your Name" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "pyvisa",
+  # pyvisa-py provides a pure Python VISA backend when NI-VISA is not installed
+  "pyvisa-py",
+  "psutil",
+  "zeroconf",
+  "pyusb"
+]
+
+[project.scripts]
+testbench = "testbench.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -2,7 +2,8 @@
 Python module usage test
 """
 
-from siglent_SPD1305X import SPD1305X
+from testbench.psu.siglent_spd1305x import SiglentSPD1305X as SPD1305X
+import sys
 import time
 
 
@@ -10,7 +11,7 @@ if __name__ == '__main__':
 
     psu = SPD1305X()
 
-    if not psu.online:
+    if not psu.online():
         print("Cannot find Siglent SPD1305X")
         sys.exit(1)
     else:
@@ -18,9 +19,10 @@ if __name__ == '__main__':
 
 
     # setpoint 1
-    psu.set_voltage(1.5)
+    channel = 1
+    psu.set_voltage(channel, 1.5)
     time.sleep(0.5)
-    psu.set_current(0.003)
+    psu.set_current(channel, 0.003)
 
     time.sleep(1)
 
@@ -30,27 +32,27 @@ if __name__ == '__main__':
     time.sleep(1)
 
     # power on
-    psu.turn_on_power()
+    psu.output_on(channel)
 
     time.sleep(1)
 
     # setpoint 2
-    psu.set_voltage(3.3)
+    psu.set_voltage(channel, 3.3)
     time.sleep(0.5)
-    psu.set_current(0.1)
+    psu.set_current(channel, 0.1)
 
     # Wait for graph to update
     time.sleep(2)
 
     # setpoint 3
-    psu.set_voltage(1.8)
+    psu.set_voltage(channel, 1.8)
     time.sleep(0.1)
-    psu.set_current(0.01)
+    psu.set_current(channel, 0.01)
 
     time.sleep(2)
 
     # power off
-    psu.turn_off_power()
+    psu.output_off(channel)
 
     time.sleep(5)
 

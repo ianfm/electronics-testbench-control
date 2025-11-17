@@ -1,0 +1,4 @@
+# /etc/udev/rules.d/99-visa.rules
+SUBSYSTEM=="usb", ATTR{idVendor}=="1ab1", GROUP="plugdev", MODE="0660"
+SUBSYSTEM=="usb", ATTR{idVendor}=="f4ec", GROUP="plugdev", MODE="0660"
+KERNEL=="usbtmc*", GROUP="plugdev", MODE="0660"

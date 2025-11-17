@@ -1,5 +1,0 @@
-pyserial
-pytz
-argparse
-pymodbus
-pyvisa

@@ -22,3 +22,34 @@ class SiglentSPD1305X(ScpiPSU):
 
     def turn_off_display(self, channel: int = 1) -> None:
         self.driver.write(f"OUTP:WAVE CH{channel},OFF")
+
+    def get_voltage(self, channel: int = 1) -> float | None:
+        res = self.driver.resource
+        if res is None:
+            return None
+        try:
+            res.write(f"CH{channel}:VOLT?")
+            time.sleep(self.driver.settings.query_delay)
+            raw = res.read_raw(1024).decode("utf-8", errors="ignore").strip()
+            return float(raw)
+        except Exception:
+            return None
+
+    def get_current(self, channel: int = 1) -> float | None:
+        res = self.driver.resource
+        if res is None:
+            return None
+        try:
+            res.write(f"CH{channel}:CURR?")
+            time.sleep(self.driver.settings.query_delay)
+            raw = res.read_raw(1024).decode("utf-8", errors="ignore").strip()
+            return float(raw)
+        except Exception:
+            return None
+
+    def set_voltage(self, channel: int, volts: float) -> None:
+        # For this model, skip read-back verification to avoid timeouts.
+        self.driver.write(f"CH{channel}:VOLT {volts}")
+
+    def set_current(self, channel: int, amps: float) -> None:
+        self.driver.write(f"CH{channel}:CURR {amps}")

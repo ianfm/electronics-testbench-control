@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import time
 from dataclasses import dataclass
 from typing import Iterable, Optional, Protocol, TypeVar
 
@@ -66,6 +67,7 @@ class SCPIDriver:
         name = matches[0]
         self.resource = self.rm.open_resource(name, timeout=self.settings.timeout_ms)
         self.resource.write_termination = "\n"
+        self.resource.read_termination = "\n"
         return name
 
     def write(self, command: str) -> None:
@@ -77,7 +79,11 @@ class SCPIDriver:
         if self.resource is None:
             raise RuntimeError("No SCPI resource connected")
         self.write(command)
-        raw = self.resource.read_raw(1024).decode("utf-8").strip()
+        time.sleep(self.settings.query_delay)
+        # Some devices (e.g., Siglent SPD1305X) misbehave with pyvisa-py's read(),
+        # but consistently return data via read_raw.
+        raw_bytes = self.resource.read_raw(1024)
+        raw = raw_bytes.decode("utf-8", errors="ignore").strip()
         return cast(raw) if cast else raw
 
     def close(self) -> None:

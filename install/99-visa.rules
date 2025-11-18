@@ -1,4 +1,10 @@
 # /etc/udev/rules.d/99-visa.rules
+# Rigol
 SUBSYSTEM=="usb", ATTR{idVendor}=="1ab1", GROUP="plugdev", MODE="0660"
+# Siglent
 SUBSYSTEM=="usb", ATTR{idVendor}=="f4ec", GROUP="plugdev", MODE="0660"
+# Keysight (any)
+SUBSYSTEM=="usb", ATTR{idVendor}=="2a8d", GROUP="plugdev", MODE="0660"
+# Keithley/Tektronix
+SUBSYSTEM=="usb", ATTR{idVendor}=="05e6", GROUP="plugdev", MODE="0660"
 KERNEL=="usbtmc*", GROUP="plugdev", MODE="0660"

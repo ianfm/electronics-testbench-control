@@ -10,8 +10,13 @@ set -euo pipefail
 RULE_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/99-visa.rules"
 RULE_DST="/etc/udev/rules.d/99-visa.rules"
 
-echo "Installing udev rule to ${RULE_DST}"
-sudo cp "${RULE_SRC}" "${RULE_DST}"
+echo "Installing udev rule from ${RULE_SRC} to ${RULE_DST}"
+# Use install to ensure permissions and ownership are sane.
+sudo install -m 664 -o root -g root "${RULE_SRC}" "${RULE_DST}"
+if [[ ! -f "${RULE_DST}" ]]; then
+  echo "Failed to place udev rule at ${RULE_DST}" >&2
+  exit 1
+fi
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 

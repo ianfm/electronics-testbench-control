@@ -28,9 +28,14 @@ class SourceMeter(ABC):
 class ScpiSourceMeter(SourceMeter):
     ID_SUBSTRINGS: tuple[str, ...] = ()
 
-    def __init__(self, settings: SCPISettings = SCPISettings()) -> None:
+    def __init__(
+        self, settings: SCPISettings = SCPISettings(), resource_name: str | None = None
+    ) -> None:
         driver = SCPIDriver(settings)
-        self.instrument_name = driver.connect_first(self.ID_SUBSTRINGS)
+        if resource_name:
+            self.instrument_name = driver.connect_resource(resource_name)
+        else:
+            self.instrument_name = driver.connect_first(self.ID_SUBSTRINGS)
         super().__init__(driver)
 
     def identify(self) -> str:

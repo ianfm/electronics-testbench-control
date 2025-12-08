@@ -68,6 +68,13 @@ class SCPIDriver:
         self.resource.write_termination = "\n"
         return name
 
+    def connect_resource(self, resource_name: str) -> str:
+        """Connect directly to the provided VISA resource name."""
+        pyvisa.query_delay = self.settings.query_delay
+        self.resource = self.rm.open_resource(resource_name, timeout=self.settings.timeout_ms)
+        self.resource.write_termination = "\n"
+        return resource_name
+
     def write(self, command: str) -> None:
         if self.resource is None:
             raise RuntimeError("No SCPI resource connected")
@@ -79,6 +86,33 @@ class SCPIDriver:
         self.write(command)
         raw = self.resource.read_raw(1024).decode("utf-8").strip()
         return cast(raw) if cast else raw
+
+    def query_raw(self, command: str, size: int = 4096) -> bytes:
+        """Send a query and return the raw byte payload without decoding."""
+        if self.resource is None:
+            raise RuntimeError("No SCPI resource connected")
+        self.write(command)
+        return self.resource.read_raw(size)
+
+    def query_float_list(self, command: str) -> list[float]:
+        """Send a query and parse the response as a comma-separated float list."""
+        response = self.query(command)
+        if isinstance(response, str):
+            if not response:
+                return []
+            return [float(part) for part in response.split(",") if part.strip()]
+        raise TypeError("query_float_list requires text response")
+
+    @staticmethod
+    def format_channel_list(channels: Iterable[int]) -> str:
+        """Build ``(@1,2,...)`` syntax from a sequence of channels."""
+        ch_list = list(channels)
+        if not ch_list:
+            raise ValueError("Channel list cannot be empty")
+        if any(ch <= 0 for ch in ch_list):
+            raise ValueError("Channels must be positive integers")
+        inner = ",".join(str(ch) for ch in ch_list)
+        return f"(@{inner})"
 
     def close(self) -> None:
         if self.resource:

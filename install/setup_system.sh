@@ -18,7 +18,7 @@ sudo udevadm trigger
 # Optionally install libusb packages if using apt-based distro.
 if command -v apt-get >/dev/null 2>&1; then
   echo "Installing libusb runtime/dev packages (requires sudo)..."
-  sudo apt-get install -y libusb-1.0-0 libusb-1.0-0-dev
+  sudo apt-get install -y libusb-1.0-0 libusb-1.0-0-dev python3-venv
 else
   echo "Skipping libusb install (apt-get not found); install libusb 1.0 manually."
 fi
@@ -37,4 +37,10 @@ else
   echo "You must log out/in or reboot for group membership to take effect."
 fi
 
+echo "Creating venv and installing this package"
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
 echo "Done. Unplug and replug instruments. Verify with: python3 examples/list_devices.py"
+

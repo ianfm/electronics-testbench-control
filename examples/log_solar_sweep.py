@@ -128,8 +128,13 @@ def configure_solar_sweep(smu: KeysightB2902B, args: argparse.Namespace) -> None
     driver.write(f":SENS:CURR:NPLC {args.nplc}")
     driver.write(f"SENS{args.channel}:WAIT:OFFS {args.wait_offset}")
 
-    driver.write(":FORM:ELEM VOLT,CURR")
+    configure_trace_format(driver)
     driver.write(":OUTP ON")
+
+
+def configure_trace_format(driver: SCPIDriver) -> None:
+    driver.write(":FORM:DATA ASC")
+    driver.write(":FORM:ELEM:SENS VOLT,CURR")
 
 
 def prepare_trace(driver: SCPIDriver, points: int) -> None:
@@ -137,7 +142,7 @@ def prepare_trace(driver: SCPIDriver, points: int) -> None:
     driver.write(":TRAC:FEED:CONT NEV")
     driver.write(f":TRAC:POIN {points}")
     driver.write(":TRAC:FEED SENS")
-    driver.write(":FORM:ELEM VOLT,CURR")
+    configure_trace_format(driver)
     driver.write(":TRAC:FEED:CONT NEXT")
 
 
@@ -155,12 +160,15 @@ def run_single_sweep(driver: SCPIDriver, points: int) -> list[tuple[float, float
         f":TRAC:DATA? 1,{act}", size=max(4096, act * 48)
     ).decode("utf-8")
     values = [float(part) for part in payload.strip().split(",") if part.strip()]
-    if len(values) < act * 2:
-        raise RuntimeError(
-            f"Expected {act * 2} values from trace, received {len(values)}"
+    if len(values) % 2 != 0:
+        raise RuntimeError(f"Trace returned an odd number of values: {len(values)}")
+    actual_pairs = len(values) // 2
+    if actual_pairs != act:
+        print(
+            f"Warning: expected {act} samples from trace but received {actual_pairs}"
         )
     samples: list[tuple[float, float]] = []
-    for idx in range(0, act * 2, 2):
+    for idx in range(0, actual_pairs * 2, 2):
         samples.append((values[idx], values[idx + 1]))
     return samples
 

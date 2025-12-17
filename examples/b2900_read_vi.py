@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 import time
 
@@ -60,11 +61,21 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Leave the output enabled when exiting (default: turn it off)",
     )
+    parser.add_argument(
+        "--csv",
+        type=str,
+        help="Optional path to log the readings as CSV (sample,time,V,I)",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    csv_file = open(args.csv, "w", newline="") if args.csv else None
+    csv_writer = csv.writer(csv_file) if csv_file else None
+    if csv_writer:
+        csv_writer.writerow(["sample", "time_s", "V", "I"])
+
     settings = SCPISettings()
     smu = KeysightB2902B(settings=settings, resource_name=args.resource)
     if not smu.online():
@@ -100,6 +111,11 @@ def main() -> int:
             timestamp = time.time() - start
             count += 1
             print(f"{count:04d} | {timestamp:8.3f}s | V={voltage:.6f} V | I={current:.6f} A")
+            if csv_writer:
+                csv_writer.writerow(
+                    [count, f"{timestamp:.3f}", f"{voltage:.6f}", f"{current:.6f}"]
+                )
+                csv_file.flush()
             if target_time and time.time() >= target_time:
                 break
             next_sample += interval
@@ -110,6 +126,8 @@ def main() -> int:
     finally:
         if not args.keep_on:
             smu.output.set_output_enabled(False, channel=ch)
+        if csv_file:
+            csv_file.close()
     return 0
 
 

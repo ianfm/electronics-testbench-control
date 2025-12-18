@@ -10,3 +10,5 @@ dist/
 *.pyc
 *.pyo
 *.pyd
+
+data/*

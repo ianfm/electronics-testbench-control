@@ -217,6 +217,13 @@ def log_sweeps(smu: KeysightB2902B, args: argparse.Namespace) -> None:
             timestamp = datetime.now().isoformat(timespec="seconds")
             elapsed = sweep_started - start_time
             samples = run_single_sweep(smu.driver, args.points)
+            mpp = _find_maximum_power_point(samples)
+            if mpp:
+                point, voltage, current, power = mpp
+                print(
+                    f"Sweep {sweep_index} maximum power point: {power:.3f} W at "
+                    f"{voltage:.3f} V, {current:.3f} A (point {point}/{len(samples)})"
+                )
             for point_index, (voltage, current) in enumerate(samples, start=1):
                 writer.writerow(
                     [
@@ -242,6 +249,21 @@ def log_sweeps(smu: KeysightB2902B, args: argparse.Namespace) -> None:
         print("\nStopping (Ctrl+C)")
     finally:
         csv_file.close()
+
+
+def _find_maximum_power_point(
+    samples: list[tuple[float, float]]
+) -> tuple[int, float, float, float] | None:
+    best_point: tuple[int, float, float, float] | None = None
+    best_power = float("-inf")
+    for idx, (voltage, current) in enumerate(samples, start=1):
+        power = -(voltage * current)
+        if power <= 0:
+            continue
+        if power > best_power:
+            best_power = power
+            best_point = (idx, voltage, current, power)
+    return best_point
 
 
 def main() -> int:

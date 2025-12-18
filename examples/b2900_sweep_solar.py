@@ -75,8 +75,55 @@ def main() -> int:
 
     # --- Verify and fetch exactly what was stored ---
     act = int(float(smu.driver.query_raw(":TRAC:POIN:ACT?")))
-    smu.driver.query_raw(f":TRAC:DATA? 1,{act}")  # V1,I1,V2,I2,...
+    payload = smu.driver.query_raw(f":TRAC:DATA? 1,{act}")
+    samples = _parse_trace_payload(payload)
+    if not samples:
+        print("No sweep data returned")
+        return 1
+
+    mpp = _find_maximum_power_point(samples)
+    if mpp is None:
+        print("Sweep completed but no positive power points were found.")
+        return 0
+
+    point, voltage, current, power = mpp
+    print(
+        f"Maximum power point: {power:.3f} W at "
+        f"{voltage:.3f} V, {current:.3f} A (point {point}/{len(samples)})"
+    )
     return 0
+
+
+def _parse_trace_payload(payload: bytes) -> list[tuple[float, float]]:
+    decoded = payload.decode("utf-8").strip()
+    if not decoded:
+        return []
+    values = [float(part) for part in decoded.split(",") if part.strip()]
+    if len(values) % 2 != 0:
+        # Some firmware versions occasionally report an extra pending datum even
+        # though the trace buffer only contains completed pairs. Drop the straggler
+        # so downstream processing can continue.
+        print(
+            f"Warning: dropping last trace value from odd-length payload ({len(values)} entries)"
+        )
+        values = values[:-1]
+    return [(values[i], values[i + 1]) for i in range(0, len(values), 2)]
+
+
+def _find_maximum_power_point(
+    samples: list[tuple[float, float]]
+) -> tuple[int, float, float, float] | None:
+    best_point: tuple[int, float, float, float] | None = None
+    best_power = float("-inf")
+    for idx, (voltage, current) in enumerate(samples, start=1):
+        # The SMU sinks current from the panel, so delivered power is -V*I.
+        power = -(voltage * current)
+        if power <= 0:
+            continue
+        if power > best_power:
+            best_power = power
+            best_point = (idx, voltage, current, power)
+    return best_point
 
 
 if __name__ == "__main__":

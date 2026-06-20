@@ -78,20 +78,36 @@ class BalancerApp:
         self.psu: SiglentSPD3303X | None = None
 
         # Setup batch configurations
-        # Batch 1: Cells 1-8, MUX 201-208, ACT 301-308, PSU CH1
-        self.batch1 = BatchState(
-            name="Batch 1 (Cells 1-8)",
-            psu_channel=1,
-            mux_channels=list(range(201, 209)),
-            act_channels=list(range(301, 309)),
-        )
-        # Batch 2: Cells 9-16, MUX 209-216, ACT 309-316, PSU CH2
-        self.batch2 = BatchState(
-            name="Batch 2 (Cells 9-16)",
-            psu_channel=2,
-            mux_channels=list(range(209, 217)),
-            act_channels=list(range(309, 317)),
-        )
+        if batches == "4/4":
+            # 4 sequential cells on Batch 1 (PSU CH1), 4 sequential cells on Batch 2 (PSU CH2)
+            self.batch1 = BatchState(
+                name="Batch 1 (Cells 1-4)",
+                psu_channel=1,
+                mux_channels=list(range(201, 205)),
+                act_channels=list(range(301, 305)),
+            )
+            self.batch2 = BatchState(
+                name="Batch 2 (Cells 5-8)",
+                psu_channel=2,
+                mux_channels=list(range(205, 209)),
+                act_channels=list(range(305, 309)),
+            )
+        else:
+            # Standard 8/8 split
+            # Batch 1: Cells 1-8, MUX 201-208, ACT 301-308, PSU CH1
+            self.batch1 = BatchState(
+                name="Batch 1 (Cells 1-8)",
+                psu_channel=1,
+                mux_channels=list(range(201, 209)),
+                act_channels=list(range(301, 309)),
+            )
+            # Batch 2: Cells 9-16, MUX 209-216, ACT 309-316, PSU CH2
+            self.batch2 = BatchState(
+                name="Batch 2 (Cells 9-16)",
+                psu_channel=2,
+                mux_channels=list(range(209, 217)),
+                act_channels=list(range(309, 317)),
+            )
 
         if batches == "1":
             self.batch2.status = "COMPLETED"
@@ -174,7 +190,11 @@ class BalancerApp:
         """Measure cell voltages in a batch after opening the charge relays to settle."""
         if self.simulated:
             # Return simulated voltages for this batch
-            indices = range(0, 8) if batch.psu_channel == 1 else range(8, 16)
+            if batch.psu_channel == 1:
+                indices = range(0, len(batch.mux_channels))
+            else:
+                n1 = len(self.batch1.mux_channels)
+                indices = range(n1, n1 + len(batch.mux_channels))
             return [self.sim_voltages[i] for i in indices]
 
         # 1. Open charge relays for this batch to ensure we measure open-circuit/settled voltage
@@ -246,8 +266,8 @@ class BalancerApp:
                 if v < self.target_voltage and v < (v_min + self.parallel_delta):
                     active_indices.append(idx)
 
-        # Map batch indices to global cell numbers (1-16)
-        offset = 0 if batch.psu_channel == 1 else 8
+        # Map batch indices to global cell numbers (e.g. 1-16 or 1-8)
+        offset = 0 if batch.psu_channel == 1 else len(self.batch1.mux_channels)
         batch.active_cells = [idx + 1 + offset for idx in active_indices]
 
         if not batch.active_cells:
@@ -312,21 +332,24 @@ class BalancerApp:
 
     def simulate_step(self, dt: float) -> None:
         """Simulate battery cell charging physics."""
+        n1 = len(self.batch1.mux_channels)
+        n2 = len(self.batch2.mux_channels)
+
         # Calculate currents using the parallel impedance model
         currents1 = self.calculate_cell_currents(
-            self.sim_voltages[:8], self.batch1.active_cells, self.batch1.current_reading
+            self.sim_voltages[:n1], self.batch1.active_cells, self.batch1.current_reading
         )
         currents2 = self.calculate_cell_currents(
-            self.sim_voltages[8:], [c - 8 for c in self.batch2.active_cells], self.batch2.current_reading
+            self.sim_voltages[n1:n1+n2], [c - n1 for c in self.batch2.active_cells], self.batch2.current_reading
         )
 
-        for idx in range(16):
-            i_cell = (currents1[idx] if idx < 8 else currents2[idx - 8])
+        for idx in range(n1 + n2):
+            i_cell = (currents1[idx] if idx < n1 else currents2[idx - n1])
             # Voltage rises proportionally to calculated cell current * dt
             self.sim_voltages[idx] += i_cell * dt * 0.005
             
             # Cap voltage at the target charging voltage for the batch
-            v_set = self.batch1.voltage_set if idx < 8 else self.batch2.voltage_set
+            v_set = self.batch1.voltage_set if idx < n1 else self.batch2.voltage_set
             if self.sim_voltages[idx] > v_set:
                 self.sim_voltages[idx] = v_set
 
@@ -358,7 +381,7 @@ class BalancerApp:
                 sys.stdout.write("PSU output: OFF\n")
             sys.stdout.write("-" * 70 + "\n")
 
-            for i in range(8):
+            for i in range(len(batch.mux_channels)):
                 cell_idx = offset + i
                 cell_num = cell_idx + 1
                 v = voltages[cell_idx]
@@ -368,7 +391,7 @@ class BalancerApp:
             sys.stdout.write("\n")
 
         print_batch(self.batch1, 0)
-        print_batch(self.batch2, 8)
+        print_batch(self.batch2, len(self.batch1.mux_channels))
 
     def step(self) -> bool:
         """Executes a single monitoring, control, and safety check step.
@@ -416,7 +439,7 @@ class BalancerApp:
             currents1 = self.calculate_cell_currents(
                 v1, self.batch1.active_cells, self.batch1.current_reading
             )
-            for idx in range(8):
+            for idx in range(len(v1)):
                 if currents1[idx] > self.max_cell_current:
                     raise ValueError(
                         f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 1} is {currents1[idx]:.3f} A, "
@@ -425,13 +448,14 @@ class BalancerApp:
                     )
 
         if self.batch2.status != "COMPLETED":
+            n1 = len(self.batch1.mux_channels)
             currents2 = self.calculate_cell_currents(
-                v2, [c - 8 for c in self.batch2.active_cells], self.batch2.current_reading
+                v2, [c - n1 for c in self.batch2.active_cells], self.batch2.current_reading
             )
-            for idx in range(8):
+            for idx in range(len(v2)):
                 if currents2[idx] > self.max_cell_current:
                     raise ValueError(
-                        f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 9} is {currents2[idx]:.3f} A, "
+                        f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + n1 + 1} is {currents2[idx]:.3f} A, "
                         f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A! "
                         f"Aborting immediately."
                     )

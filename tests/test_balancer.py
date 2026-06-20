@@ -116,6 +116,24 @@ class BalancerAppTests(unittest.TestCase):
             
             # Should only measure batch1 cell voltages
             mock_measure.assert_called_once_with(app.batch1)
+    def test_batches_split_4_4(self) -> None:
+        # Initialize app in "4/4" batches split
+        app = BalancerApp(simulated=True, batches="4/4")
+        self.assertEqual(len(app.batch1.mux_channels), 4)
+        self.assertEqual(len(app.batch2.mux_channels), 4)
+        self.assertEqual(app.batch1.status, "MONITORING")
+        self.assertEqual(app.batch2.status, "MONITORING")
+
+        # Mock print_dashboard and check step
+        with patch.object(app, 'print_dashboard'):
+            # It should complete a step successfully without raising any exceptions
+            completed = app.step()
+            self.assertFalse(completed)
+
+        # In 4/4 mode, mock simulated step should work as expected
+        app.simulate_step(1.0)
+        # Check that active voltages are updated
+        self.assertGreater(app.sim_voltages[0], 2.90)
 
 
 if __name__ == "__main__":

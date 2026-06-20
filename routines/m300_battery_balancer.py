@@ -54,6 +54,7 @@ class BalancerApp:
         self,
         target_voltage: float = 3.60,
         balance_delta: float = 0.02,
+        parallel_delta: float = 0.01,
         simulated: bool = False,
         interval: float = 5.0,
         mode: str = "single",
@@ -62,6 +63,7 @@ class BalancerApp:
     ) -> None:
         self.target_voltage = target_voltage
         self.balance_delta = balance_delta
+        self.parallel_delta = parallel_delta
         self.simulated = simulated
         self.interval = interval
         self.mode = mode
@@ -195,7 +197,7 @@ class BalancerApp:
 
         # Select cells to charge:
         # If running in "single" mode, only charge the single weakest cell.
-        # Otherwise, in "parallel" mode, charge all cells within balance_delta of the weakest cell.
+        # Otherwise, in "parallel" mode, charge all cells within parallel_delta of the weakest cell.
         active_indices = []
         if self.mode == "single":
             if v_min < self.target_voltage:
@@ -203,7 +205,7 @@ class BalancerApp:
                 active_indices = [weakest_idx]
         else:
             for idx, v in enumerate(voltages):
-                if v < self.target_voltage and v < (v_min + self.balance_delta):
+                if v < self.target_voltage and v < (v_min + self.parallel_delta):
                     active_indices.append(idx)
 
         # Map batch indices to global cell numbers (1-16)
@@ -286,8 +288,8 @@ class BalancerApp:
         sys.stdout.write(CLEAR_SCREEN)
         sys.stdout.write(f"{COLOR_BOLD}{COLOR_BLUE}=== LiFePO4 Battery Cell 16-Channel Balancer ==={COLOR_RESET}\n")
         sys.stdout.write(f"Target Voltage: {COLOR_BOLD}{self.target_voltage:.3f} V{COLOR_RESET} | ")
-        sys.stdout.write(f"Balance Mode: {COLOR_BOLD}{self.mode.upper()}{COLOR_RESET} | ")
-        sys.stdout.write(f"Balance Delta: {COLOR_BOLD}{self.balance_delta * 1000:.0f} mV{COLOR_RESET}\n")
+        sys.stdout.write(f"Mode: {COLOR_BOLD}{self.mode.upper()}{COLOR_RESET} | ")
+        sys.stdout.write(f"Parallel Delta: {COLOR_BOLD}{self.parallel_delta * 1000:.0f} mV{COLOR_RESET}\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
         # Helper to draw progress bars
@@ -416,6 +418,12 @@ def main() -> None:
         help="Balancing mode: single cell charging (default, safest) or parallel charging",
     )
     parser.add_argument(
+        "--parallel-delta",
+        type=float,
+        default=0.01,
+        help="Maximum voltage difference in Volts between cells allowed to charge in parallel (default: 0.01)",
+    )
+    parser.add_argument(
         "--max-voltage",
         type=float,
         default=3.65,
@@ -433,6 +441,7 @@ def main() -> None:
     app = BalancerApp(
         target_voltage=args.target,
         balance_delta=args.delta,
+        parallel_delta=args.parallel_delta,
         simulated=args.sim,
         interval=args.interval,
         mode=args.mode,

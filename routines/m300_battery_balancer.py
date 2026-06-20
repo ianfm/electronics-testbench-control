@@ -43,16 +43,19 @@ class BatchState:
     voltage_set: float = 0.0
     current_set: float = 0.0
     current_reading: float = 0.0
+    last_voltages: List[float] = None
 
     def __post_init__(self):
         if self.active_cells is None:
             self.active_cells = []
+        if self.last_voltages is None:
+            self.last_voltages = [0.0] * len(self.mux_channels)
 
 
 class BalancerApp:
     def __init__(
         self,
-        target_voltage: float = 3.60,
+        target_voltage: float = 3.50,
         balance_delta: float = 0.02,
         parallel_delta: float = 0.01,
         simulated: bool = False,
@@ -77,6 +80,8 @@ class BalancerApp:
         self.ocv_interval = ocv_interval
         self.last_ocv_time = 0.0
         self.trigger_ocv_next = True  # Start with an OCV measurement
+        self.psu_overcurrent_cycles = {1: 0, 2: 0}
+        self.cell_overcurrent_cycles = [0] * 16
 
         self.daq: RigolM300 | None = None
         self.psu: SiglentSPD3303X | None = None
@@ -288,15 +293,15 @@ class BalancerApp:
         # Determine charge rates based on weakest cell voltage
         if v_min < 3.0:
             batch.charge_mode = "RECOVERY"
-            batch.voltage_set = 3.30
+            batch.voltage_set = min(3.30, self.target_voltage - 0.2)
             i_cell = 0.2  # Gentle recovery current
-        elif v_min < 3.45:
+        elif v_min < (self.target_voltage - 0.15):
             batch.charge_mode = "BULK"
-            batch.voltage_set = 3.60
+            batch.voltage_set = self.target_voltage
             i_cell = 1.0  # Bulk charge current
         else:
             batch.charge_mode = "BALANCING"
-            batch.voltage_set = 3.62
+            batch.voltage_set = self.target_voltage + 0.02
             i_cell = 0.3  # Precision top-off/balancing current
 
         # Scale current based on number of active cells in parallel
@@ -420,8 +425,18 @@ class BalancerApp:
         )
 
         # 1. Measure cell voltages
-        v1 = self.measure_cell_voltages(self.batch1, open_circuit=need_ocv) if self.batch1.status != "COMPLETED" else [0.0] * 8
-        v2 = self.measure_cell_voltages(self.batch2, open_circuit=need_ocv) if self.batch2.status != "COMPLETED" else [0.0] * 8
+        if self.batch1.status != "COMPLETED":
+            v1 = self.measure_cell_voltages(self.batch1, open_circuit=need_ocv)
+            self.batch1.last_voltages = v1
+        else:
+            v1 = self.batch1.last_voltages
+
+        if self.batch2.status != "COMPLETED":
+            v2 = self.measure_cell_voltages(self.batch2, open_circuit=need_ocv)
+            self.batch2.last_voltages = v2
+        else:
+            v2 = self.batch2.last_voltages
+
         all_voltages = v1 + v2
 
         if need_ocv:
@@ -472,32 +487,36 @@ class BalancerApp:
                         if cell_num in batch.active_cells and v >= self.target_voltage:
                             self.trigger_ocv_next = True
 
-        # Safety Check: PSU channel total overcurrent protection (strict limit)
-        if self.batch1.status != "COMPLETED" and self.batch1.current_reading > self.max_current:
-            raise ValueError(
-                f"CRITICAL SAFETY VIOLATION: PSU Channel 1 current {self.batch1.current_reading:.3f} A "
-                f"exceeded safety limit of {self.max_current:.3f} A! "
-                f"Aborting immediately."
-            )
-        if self.batch2.status != "COMPLETED" and self.batch2.current_reading > self.max_current:
-            raise ValueError(
-                f"CRITICAL SAFETY VIOLATION: PSU Channel 2 current {self.batch2.current_reading:.3f} A "
-                f"exceeded safety limit of {self.max_current:.3f} A! "
-                f"Aborting immediately."
-            )
+        # Safety Check: PSU channel total overcurrent protection (debounced)
+        for batch in (self.batch1, self.batch2):
+            if batch.status != "COMPLETED":
+                if batch.current_reading > self.max_current:
+                    self.psu_overcurrent_cycles[batch.psu_channel] += 1
+                    if self.psu_overcurrent_cycles[batch.psu_channel] >= 2:
+                        raise ValueError(
+                            f"CRITICAL SAFETY VIOLATION: PSU Channel {batch.psu_channel} current {batch.current_reading:.3f} A "
+                            f"exceeded safety limit of {self.max_current:.3f} A for 2 consecutive cycles! "
+                            f"Aborting immediately."
+                        )
+                else:
+                    self.psu_overcurrent_cycles[batch.psu_channel] = 0
 
-        # Safety Check: Calculated individual cell overcurrent protection
+        # Safety Check: Calculated individual cell overcurrent protection (debounced)
         if self.batch1.status != "COMPLETED":
             currents1 = self.calculate_cell_currents(
                 v1, self.batch1.active_cells, self.batch1.current_reading
             )
             for idx in range(len(v1)):
                 if currents1[idx] > self.max_cell_current:
-                    raise ValueError(
-                        f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 1} is {currents1[idx]:.3f} A, "
-                        f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A! "
-                        f"Aborting immediately."
-                    )
+                    self.cell_overcurrent_cycles[idx] += 1
+                    if self.cell_overcurrent_cycles[idx] >= 2:
+                        raise ValueError(
+                            f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 1} is {currents1[idx]:.3f} A, "
+                            f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A for 2 consecutive cycles! "
+                            f"Aborting immediately."
+                        )
+                else:
+                    self.cell_overcurrent_cycles[idx] = 0
 
         if self.batch2.status != "COMPLETED":
             n1 = len(self.batch1.mux_channels)
@@ -505,12 +524,17 @@ class BalancerApp:
                 v2, [c - n1 for c in self.batch2.active_cells], self.batch2.current_reading
             )
             for idx in range(len(v2)):
+                global_idx = idx + n1
                 if currents2[idx] > self.max_cell_current:
-                    raise ValueError(
-                        f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + n1 + 1} is {currents2[idx]:.3f} A, "
-                        f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A! "
-                        f"Aborting immediately."
-                    )
+                    self.cell_overcurrent_cycles[global_idx] += 1
+                    if self.cell_overcurrent_cycles[global_idx] >= 2:
+                        raise ValueError(
+                            f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {global_idx + 1} is {currents2[idx]:.3f} A, "
+                            f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A for 2 consecutive cycles! "
+                            f"Aborting immediately."
+                        )
+                else:
+                    self.cell_overcurrent_cycles[global_idx] = 0
 
         # 3. Render dashboard
         self.print_dashboard(all_voltages)
@@ -559,8 +583,8 @@ def main() -> None:
     parser.add_argument(
         "--target",
         type=float,
-        default=3.60,
-        help="Target balance voltage in Volts (default: 3.60)",
+        default=3.50,
+        help="Target balance voltage in Volts (default: 3.50)",
     )
     parser.add_argument(
         "--delta",

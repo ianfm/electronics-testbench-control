@@ -82,6 +82,9 @@ class BalancerAppTests(unittest.TestCase):
         
         with patch.object(app, 'update_batch_state'):
             with patch.object(app, 'measure_cell_voltages', return_value=[3.20]*8):
+                # Cycle 1: Increments cycle count to 1
+                app.step()
+                # Cycle 2: Exceeds threshold again, triggering ValueError
                 with self.assertRaises(ValueError) as ctx:
                     app.step()
         self.assertIn("PSU Channel 1 current 3.250 A exceeded safety limit of 3.200 A", str(ctx.exception))
@@ -99,6 +102,9 @@ class BalancerAppTests(unittest.TestCase):
         # Mock update_batch_state to do nothing so it doesn't overwrite our manual active_cells and current_reading
         with patch.object(app, 'update_batch_state'):
             with patch.object(app, 'measure_cell_voltages', return_value=[3.20, 3.24] + [3.3]*6):
+                # Cycle 1: Increments cycle count to 1
+                app.step()
+                # Cycle 2: Exceeds threshold again, triggering ValueError
                 with self.assertRaises(ValueError) as ctx:
                     app.step()
         self.assertIn("exceeded individual cell current safety limit of 1.200 A", str(ctx.exception))

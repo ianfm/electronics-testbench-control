@@ -56,11 +56,17 @@ class BalancerApp:
         balance_delta: float = 0.02,
         simulated: bool = False,
         interval: float = 5.0,
+        mode: str = "single",
+        max_voltage: float = 3.65,
+        max_current: float = 3.2,
     ) -> None:
         self.target_voltage = target_voltage
         self.balance_delta = balance_delta
         self.simulated = simulated
         self.interval = interval
+        self.mode = mode
+        self.max_voltage = max_voltage
+        self.max_current = max_current
 
         self.daq: RigolM300 | None = None
         self.psu: SiglentSPD3303X | None = None
@@ -188,11 +194,17 @@ class BalancerApp:
         v_max = max(voltages)
 
         # Select cells to charge:
-        # Charge any cell below target voltage that is lagging (within balance_delta of the minimum cell)
+        # If running in "single" mode, only charge the single weakest cell.
+        # Otherwise, in "parallel" mode, charge all cells within balance_delta of the weakest cell.
         active_indices = []
-        for idx, v in enumerate(voltages):
-            if v < self.target_voltage and v < (v_min + self.balance_delta):
-                active_indices.append(idx)
+        if self.mode == "single":
+            if v_min < self.target_voltage:
+                weakest_idx = voltages.index(v_min)
+                active_indices = [weakest_idx]
+        else:
+            for idx, v in enumerate(voltages):
+                if v < self.target_voltage and v < (v_min + self.balance_delta):
+                    active_indices.append(idx)
 
         # Map batch indices to global cell numbers (1-16)
         offset = 0 if batch.psu_channel == 1 else 8
@@ -274,6 +286,7 @@ class BalancerApp:
         sys.stdout.write(CLEAR_SCREEN)
         sys.stdout.write(f"{COLOR_BOLD}{COLOR_BLUE}=== LiFePO4 Battery Cell 16-Channel Balancer ==={COLOR_RESET}\n")
         sys.stdout.write(f"Target Voltage: {COLOR_BOLD}{self.target_voltage:.3f} V{COLOR_RESET} | ")
+        sys.stdout.write(f"Balance Mode: {COLOR_BOLD}{self.mode.upper()}{COLOR_RESET} | ")
         sys.stdout.write(f"Balance Delta: {COLOR_BOLD}{self.balance_delta * 1000:.0f} mV{COLOR_RESET}\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
@@ -319,9 +332,32 @@ class BalancerApp:
                 v2 = self.measure_cell_voltages(self.batch2)
                 all_voltages = v1 + v2
 
+                # Safety Check: Individual cell overvoltage protection
+                for idx, v in enumerate(all_voltages):
+                    if v > self.max_voltage:
+                        raise ValueError(
+                            f"CRITICAL SAFETY VIOLATION: Cell {idx + 1} voltage {v:.3f} V "
+                            f"exceeded maximum safety limit of {self.max_voltage:.3f} V! "
+                            f"Aborting immediately."
+                        )
+
                 # 2. Update state and outputs
                 self.update_batch_state(self.batch1, v1)
                 self.update_batch_state(self.batch2, v2)
+
+                # Safety Check: Overcurrent protection
+                if self.batch1.current_reading > self.max_current:
+                    raise ValueError(
+                        f"CRITICAL SAFETY VIOLATION: PSU Channel 1 current {self.batch1.current_reading:.3f} A "
+                        f"exceeded safety limit of {self.max_current:.3f} A! "
+                        f"Aborting immediately."
+                    )
+                if self.batch2.current_reading > self.max_current:
+                    raise ValueError(
+                        f"CRITICAL SAFETY VIOLATION: PSU Channel 2 current {self.batch2.current_reading:.3f} A "
+                        f"exceeded safety limit of {self.max_current:.3f} A! "
+                        f"Aborting immediately."
+                    )
 
                 # 3. Render dashboard
                 self.print_dashboard(all_voltages)
@@ -373,6 +409,24 @@ def main() -> None:
         default=5.0,
         help="Measurement cycle interval in seconds (default: 5.0)",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["single", "parallel"],
+        default="single",
+        help="Balancing mode: single cell charging (default, safest) or parallel charging",
+    )
+    parser.add_argument(
+        "--max-voltage",
+        type=float,
+        default=3.65,
+        help="Maximum safety cell voltage limit in Volts (default: 3.65)",
+    )
+    parser.add_argument(
+        "--max-current",
+        type=float,
+        default=3.2,
+        help="Maximum safety PSU channel current limit in Amperes (default: 3.2)",
+    )
 
     args = parser.parse_args()
 
@@ -381,6 +435,9 @@ def main() -> None:
         balance_delta=args.delta,
         simulated=args.sim,
         interval=args.interval,
+        mode=args.mode,
+        max_voltage=args.max_voltage,
+        max_current=args.max_current,
     )
     app.run()
 

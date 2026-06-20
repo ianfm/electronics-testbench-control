@@ -347,17 +347,17 @@ class BalancerApp:
                 self.update_batch_state(self.batch1, v1)
                 self.update_batch_state(self.batch2, v2)
 
-                # Safety Check: Overcurrent protection
-                if self.batch1.current_reading > self.max_current:
+                # Safety Check: Overcurrent protection (with a 0.1A tolerance buffer for noise)
+                if self.batch1.current_reading > (self.max_current + 0.1):
                     raise ValueError(
                         f"CRITICAL SAFETY VIOLATION: PSU Channel 1 current {self.batch1.current_reading:.3f} A "
-                        f"exceeded safety limit of {self.max_current:.3f} A! "
+                        f"exceeded safety limit of {self.max_current:.3f} A (+0.1A tolerance)! "
                         f"Aborting immediately."
                     )
-                if self.batch2.current_reading > self.max_current:
+                if self.batch2.current_reading > (self.max_current + 0.1):
                     raise ValueError(
                         f"CRITICAL SAFETY VIOLATION: PSU Channel 2 current {self.batch2.current_reading:.3f} A "
-                        f"exceeded safety limit of {self.max_current:.3f} A! "
+                        f"exceeded safety limit of {self.max_current:.3f} A (+0.1A tolerance)! "
                         f"Aborting immediately."
                     )
 

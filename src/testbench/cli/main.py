@@ -132,6 +132,11 @@ def make_parser() -> argparse.ArgumentParser:
     psu.add_argument("--set-voltage", type=float)
     psu.add_argument("--set-current", type=float)
     psu.add_argument("--power", choices=["on", "off"])
+    psu.add_argument(
+        "--measure",
+        choices=["voltage", "current"],
+        help="Measure output voltage or current (readback)",
+    )
     _add_resource_arguments(psu)
 
     daq = sub.add_parser("daq", help="Data acquisition and switch actions")
@@ -185,6 +190,29 @@ def main(argv: list[str] | None = None) -> int:
             psu.output_on(ch)
         elif args.power == "off":
             psu.output_off(ch)
+
+        if args.measure == "voltage":
+            val = psu.get_voltage(ch)
+            if val is not None:
+                print(f"{val} V")
+            else:
+                print("Failed to read voltage")
+                return 1
+        elif args.measure == "current":
+            val = psu.get_current(ch)
+            if val is not None:
+                print(f"{val} A")
+            else:
+                print("Failed to read current")
+                return 1
+
+        if (
+            args.set_voltage is None
+            and args.set_current is None
+            and args.power is None
+            and args.measure is None
+        ):
+            print("No PSU action requested")
         return 0
 
     if args.domain == "daq":

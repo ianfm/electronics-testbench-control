@@ -4,7 +4,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from testbench.binding import bind_driver, matching_device
+from testbench.binding import DRIVER_REGISTRATIONS, bind_driver, matching_device
+from testbench.core.formatters import format_engineering
 from testbench.discovery import DiscoveryConfig, discover_instruments
 from testbench.daq.rigol_m300 import RigolM300
 from testbench.dmm.keithley_2110 import Keithley2110
@@ -150,6 +151,10 @@ def make_parser() -> argparse.ArgumentParser:
     )
     _add_discovery_arguments(discover)
 
+    sub.add_parser(
+        "verify", help="Verify the bench setup by running self-tests on all connected instruments"
+    )
+
     return parser
 
 
@@ -158,6 +163,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.domain == "discover":
         return _run_discovery(args)
+
+    if args.domain == "verify":
+        return _run_verification()
 
     if args.domain == "dmm":
         cls = DMM_MODELS[args.model]
@@ -305,6 +313,130 @@ def _run_discovery(args: argparse.Namespace) -> int:
         for warning in report.warnings:
             print(f"- {warning}")
     return 0 if devices else 1
+
+
+def _guess_driver_for_resource(resource: str) -> str | None:
+    """Guess which registered driver matches a failed VISA resource based on ID strings."""
+    if "::6833::" in resource or "::2500::" in resource or "::1ab1::" in resource or "DM3" in resource:
+        return "rigol-dm3058e"
+    if "::1510::" in resource or "::8464::" in resource or "05e6" in resource:
+        return "keithley-2110"
+    if "::62700::" in resource or "f4ec" in resource:
+        return "siglent-spd3303x"
+    if "M300" in resource:
+        return "rigol-m300"
+    return None
+
+
+def _run_verification() -> int:
+    import os
+
+    print("Discovering bench instruments...")
+    report = discover_instruments()
+
+    verified_any = False
+    failed_any = False
+
+    print("\n" + "=" * 80)
+    print(f"{'Instrument':<20} | {'Status':<8} | {'Resource':<30} | {'Self-Test Reading'}")
+    print("-" * 80)
+
+    for reg in DRIVER_REGISTRATIONS:
+        # Check environment variable overrides (consistent with hardware tests)
+        env_var = f"TEST_HW_RESOURCE_{reg.name.replace('-', '_').upper()}"
+        resource_override = os.environ.get(env_var)
+
+        device = None
+        resource_name = None
+
+        if resource_override:
+            resource_name = resource_override
+        else:
+            try:
+                device = matching_device(reg.name, report)
+            except Exception:
+                pass
+
+        # If not identified via matching_device, check if any failed attempts
+        # correspond to this driver registration.
+        matching_failure = None
+        if not device and not resource_name:
+            for attempt in report.attempts:
+                if attempt.outcome == "failed":
+                    if _guess_driver_for_resource(attempt.resource) == reg.name:
+                        matching_failure = attempt
+                        break
+
+            if not matching_failure:
+                continue
+
+        verified_any = True
+        status = "FAIL"
+        details = ""
+        endpoint = ""
+
+        if matching_failure:
+            failed_any = True
+            details = f"Failed in discovery: {matching_failure.error}"
+            status = "FAIL"
+            endpoint = matching_failure.resource
+            print(f"{reg.name:<20} | {status:<8} | {endpoint[:28]:<30} | {details}")
+            continue
+
+        try:
+            if resource_name:
+                driver_instance = reg.driver_class(resource_name=resource_name)
+                endpoint = resource_name
+            else:
+                driver_instance = bind_driver(reg.name, device)
+                endpoint = driver_instance.instrument_name
+
+            if not driver_instance.online():
+                details = "Offline"
+            else:
+                # Run safe read-only verification
+                if reg.domain == "dmm":
+                    val = driver_instance.measure_voltage_dc()
+                    details = f"Voltage: {format_engineering(val, 'V')}"
+                elif reg.domain == "daq":
+                    # MC3132 multiplexer card in slot 200, check channel 201
+                    val = driver_instance.measure_voltage_dc(201)
+                    details = f"Ch 201: {format_engineering(val, 'V')}"
+                elif reg.domain == "psu":
+                    val = driver_instance.get_voltage(1)
+                    if val is not None:
+                        details = f"Ch 1: {format_engineering(val, 'V')}"
+                    else:
+                        details = "No readback response"
+                else:
+                    details = driver_instance.identify().strip()
+                status = "PASS"
+
+            # Close connection
+            try:
+                driver_instance.driver.close()
+            except Exception:
+                pass
+        except Exception as e:
+            failed_any = True
+            details = f"Error: {e}"
+            status = "FAIL"
+            endpoint = resource_name or (device.resources[0] if device and device.resources else "Unknown")
+
+        print(f"{reg.name:<20} | {status:<8} | {endpoint[:28]:<30} | {details}")
+
+    print("=" * 80)
+
+    if not verified_any:
+        print("No registered instruments were found or configured.")
+        return 1
+
+    if failed_any:
+        print("Verification completed with self-test failures.")
+        return 1
+
+    print("Verification completed successfully. All self-tests passed!")
+    return 0
 
 
 if __name__ == "__main__":

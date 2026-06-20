@@ -70,6 +70,15 @@ class SCPIDriver:
         self.resource.read_termination = "\n"
         return name
 
+    def connect_resource(self, resource_name: str) -> str:
+        """Connect to an explicit VISA resource supplied by top-level discovery."""
+        self.resource = self.rm.open_resource(
+            resource_name, timeout=self.settings.timeout_ms
+        )
+        self.resource.write_termination = "\n"
+        self.resource.read_termination = "\n"
+        return resource_name
+
     def write(self, command: str) -> None:
         if self.resource is None:
             raise RuntimeError("No SCPI resource connected")

@@ -12,8 +12,12 @@ class RigolDM3058E(ScpiDMM):
 
     ID_SUBSTRINGS = ("DM3",)
 
-    def __init__(self, settings: SCPISettings = SCPISettings()) -> None:
-        super().__init__(settings)
+    def __init__(
+        self,
+        settings: SCPISettings = SCPISettings(),
+        resource_name: str | None = None,
+    ) -> None:
+        super().__init__(settings, resource_name=resource_name)
 
     def get_command_set(self) -> Optional[str]:
         if not self.online():

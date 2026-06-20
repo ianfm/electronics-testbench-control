@@ -11,8 +11,12 @@ class SiglentSPD3303X(ScpiPSU):
 
     ID_SUBSTRINGS = ("SPD3X",)
 
-    def __init__(self, settings: SCPISettings = SCPISettings()) -> None:
-        super().__init__(settings)
+    def __init__(
+        self,
+        settings: SCPISettings = SCPISettings(),
+        resource_name: str | None = None,
+    ) -> None:
+        super().__init__(settings, resource_name=resource_name)
         if self.online():
             self.driver.write("*RST")
             time.sleep(self.driver.settings.query_delay)

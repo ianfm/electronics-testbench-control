@@ -20,6 +20,33 @@ python3 examples/list_devices.py
 Both commands identify instruments by default. They do not reset, configure,
 trigger, route, or enable an instrument output.
 
+## Binding discovery results to drivers
+
+Model drivers retain their independent resource lookup when constructed without
+a resource. They also accept a verified resource supplied by top-level code:
+
+```python
+from testbench.binding import bind_driver, matching_device
+from testbench.discovery import discover_instruments
+
+report = discover_instruments()
+device = matching_device("siglent-spd3303x", report)
+if device is None:
+    raise RuntimeError("SPD3303X not found")
+psu = bind_driver("siglent-spd3303x", device)
+```
+
+`bind_driver` verifies that the reported manufacturer and model match the
+registered driver, chooses a verified resource, and passes that exact resource
+to the driver. USB and VXI-11 `INSTR` resources are preferred over raw TCP
+`SOCKET` resources when multiple transports identify the same serial number.
+
+The instrument CLI follows the same policy: it lets the selected driver try its
+existing independent lookup first, then falls back to top-level discovery and
+identity matching. `--resource` selects an exact endpoint immediately, while
+`--no-discovery-fallback` disables the top-level fallback. If multiple matching
+instruments are present, the command requires explicit resource selection.
+
 ## Discovery sequence
 
 1. Probe resource strings saved by the previous successful run.

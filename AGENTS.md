@@ -58,6 +58,20 @@ experimentally necessary. Determine their provenance and device effect before
 changing them. The same rule applies to apparent workarounds such as manual
 query delays, raw reads, omitted readbacks, and command-specific settling time.
 
+## Instrument documentation
+
+Maintain the programming manuals and authoritative documentation used to
+implement each instrument driver as project resources. Keep
+`docs/instrument-documentation.md` current when adding a model, changing a
+command sequence, locating a newer manual revision, or validating different
+firmware. Do not leave the only copy of a required manual isolated on an
+unmerged feature branch.
+
+When licensing permits, keep a stable local copy under `manuals/<vendor>/` and
+record its title, revision, applicable model, source URL, and repository path in
+the manifest. When redistribution is not permitted, retain the authoritative
+vendor URL and enough publication metadata to retrieve the exact document.
+
 ## Validation expectations
 
 - Hardware validation is the acceptance criterion for device interaction.

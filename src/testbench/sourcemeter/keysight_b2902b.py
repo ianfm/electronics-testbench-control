@@ -11,8 +11,12 @@ class KeysightB2902B(ScpiSourceMeter):
 
     ID_SUBSTRINGS = ("B2902", "Keysight")
 
-    def __init__(self, settings: SCPISettings = SCPISettings()) -> None:
-        super().__init__(settings)
+    def __init__(
+        self,
+        settings: SCPISettings = SCPISettings(),
+        resource_name: str | None = None,
+    ) -> None:
+        super().__init__(settings, resource_name=resource_name)
         if self.online():
             # Use remote mode and a known state.
             self.driver.write("SYST:REM")

@@ -39,4 +39,8 @@ SCPI-based drivers and helper scripts for common lab instruments (e.g., Rigol DM
 - Device drivers live under `src/testbench/**`; add new instruments by subclassing the domain interfaces in `src/testbench/domains/`.
 - Discovery failure modes, fallback behavior, and scope controls are documented
   in [`docs/discovery.md`](docs/discovery.md).
+- Model-specific programming references and their repository status are tracked
+  in [`docs/instrument-documentation.md`](docs/instrument-documentation.md).
+- Drivers can retain their independent lookup or accept a verified resource
+  selected by the top-level discovery and binding registry.
 - These instructions are tested on Ubuntu 22.04.

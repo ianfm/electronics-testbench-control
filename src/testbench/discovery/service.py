@@ -76,6 +76,23 @@ class DiscoveredDevice:
         if source not in self.sources:
             self.sources.append(source)
 
+    @property
+    def preferred_resource(self) -> str:
+        """Return the most conventional verified transport for driver binding."""
+        if not self.resources:
+            raise RuntimeError("discovered device has no verified resources")
+
+        def priority(resource: str) -> tuple[int, str]:
+            if resource.startswith("USB") and resource.endswith("::INSTR"):
+                return 0, resource
+            if resource.startswith("TCPIP") and resource.endswith("::INSTR"):
+                return 1, resource
+            if resource.startswith("TCPIP") and resource.endswith("::SOCKET"):
+                return 2, resource
+            return 3, resource
+
+        return min(self.resources, key=priority)
+
 
 @dataclass
 class DiscoveryReport:

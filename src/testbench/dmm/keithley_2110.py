@@ -12,8 +12,12 @@ class Keithley2110(ScpiDMM):
 
     ID_SUBSTRINGS = ("2110",)
 
-    def __init__(self, settings: SCPISettings = SCPISettings()) -> None:
-        super().__init__(settings)
+    def __init__(
+        self,
+        settings: SCPISettings = SCPISettings(),
+        resource_name: str | None = None,
+    ) -> None:
+        super().__init__(settings, resource_name=resource_name)
 
     def get_configuration(self) -> Tuple[str, float, float]:
         conf = self.driver.query("CONF?")

@@ -4,6 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from testbench.binding import bind_driver, matching_device
 from testbench.discovery import DiscoveryConfig, discover_instruments
 from testbench.dmm.keithley_2110 import Keithley2110
 from testbench.dmm.rigol_dm3058e import RigolDM3058E
@@ -99,6 +100,18 @@ def _add_discovery_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--idn", action="store_true", help=argparse.SUPPRESS)
 
 
+def _add_resource_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--resource",
+        help="Explicit VISA resource; bypasses independent and top-level discovery",
+    )
+    parser.add_argument(
+        "--no-discovery-fallback",
+        action="store_true",
+        help="Do not run top-level discovery if the driver cannot find its resource",
+    )
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Testbench instrument helper CLI")
     sub = parser.add_subparsers(dest="domain", required=True)
@@ -106,6 +119,7 @@ def make_parser() -> argparse.ArgumentParser:
     dmm = sub.add_parser("dmm", help="Digital multimeter actions")
     dmm.add_argument("--model", choices=DMM_MODELS.keys(), required=True)
     dmm.add_argument("--measure", choices=["voltage", "current", "resistance"])
+    _add_resource_arguments(dmm)
 
     psu = sub.add_parser("psu", help="Power supply actions")
     psu.add_argument("--model", choices=PSU_MODELS.keys(), required=True)
@@ -113,6 +127,7 @@ def make_parser() -> argparse.ArgumentParser:
     psu.add_argument("--set-voltage", type=float)
     psu.add_argument("--set-current", type=float)
     psu.add_argument("--power", choices=["on", "off"])
+    _add_resource_arguments(psu)
 
     discover = sub.add_parser(
         "discover", help="Identify instruments using VISA and LAN fallbacks"
@@ -130,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.domain == "dmm":
         cls = DMM_MODELS[args.model]
-        dmm = cls()
+        dmm = _connect_model(cls, args.model, args)
         if not dmm.online():
             print("DMM not found")
             return 1
@@ -146,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.domain == "psu":
         cls = PSU_MODELS[args.model]
-        psu = cls()
+        psu = _connect_model(cls, args.model, args)
         if not psu.online():
             print("PSU not found")
             return 1
@@ -162,6 +177,29 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     return 1
+
+
+def _connect_model(cls, model_name: str, args: argparse.Namespace):
+    """Give model discovery first chance, then bind a top-level discovery result."""
+    if args.resource:
+        return cls(resource_name=args.resource)
+
+    instrument = cls()
+    if instrument.online() or args.no_discovery_fallback:
+        return instrument
+
+    report = discover_instruments()
+    device = matching_device(model_name, report)
+    if device is None:
+        return instrument
+
+    # The first instance did not connect. Release its resource manager before
+    # constructing a driver around the verified endpoint.
+    try:
+        instrument.driver.rm.close()
+    except Exception:
+        pass
+    return bind_driver(model_name, device)
 
 
 def _run_discovery(args: argparse.Namespace) -> int:

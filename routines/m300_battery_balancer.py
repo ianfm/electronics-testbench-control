@@ -61,6 +61,7 @@ class BalancerApp:
         max_voltage: float = 3.65,
         max_current: float = 3.2,
         max_cell_current: float = 1.2,
+        batches: str = "both",
     ) -> None:
         self.target_voltage = target_voltage
         self.balance_delta = balance_delta
@@ -71,6 +72,7 @@ class BalancerApp:
         self.max_voltage = max_voltage
         self.max_current = max_current
         self.max_cell_current = max_cell_current
+        self.batches = batches
 
         self.daq: RigolM300 | None = None
         self.psu: SiglentSPD3303X | None = None
@@ -90,6 +92,13 @@ class BalancerApp:
             mux_channels=list(range(209, 217)),
             act_channels=list(range(309, 317)),
         )
+
+        if batches == "1":
+            self.batch2.status = "COMPLETED"
+            self.batch2.charge_mode = "OFF"
+        elif batches == "2":
+            self.batch1.status = "COMPLETED"
+            self.batch1.charge_mode = "OFF"
 
         # Initialize cell voltages (used for simulation)
         self.sim_voltages = [
@@ -367,14 +376,15 @@ class BalancerApp:
         Returns:
             True if charging/balancing is completed for both batches, False otherwise.
         """
-        # 1. Measure cell voltages
-        v1 = self.measure_cell_voltages(self.batch1)
-        v2 = self.measure_cell_voltages(self.batch2)
+        # 1. Measure cell voltages for active batches
+        v1 = self.measure_cell_voltages(self.batch1) if self.batch1.status != "COMPLETED" else [0.0] * 8
+        v2 = self.measure_cell_voltages(self.batch2) if self.batch2.status != "COMPLETED" else [0.0] * 8
         all_voltages = v1 + v2
 
         # Safety Check: Individual cell overvoltage protection
         for idx, v in enumerate(all_voltages):
-            if v > self.max_voltage:
+            batch_completed = self.batch1.status == "COMPLETED" if idx < 8 else self.batch2.status == "COMPLETED"
+            if not batch_completed and v > self.max_voltage:
                 raise ValueError(
                     f"CRITICAL SAFETY VIOLATION: Cell {idx + 1} voltage {v:.3f} V "
                     f"exceeded maximum safety limit of {self.max_voltage:.3f} V! "
@@ -382,17 +392,19 @@ class BalancerApp:
                 )
 
         # 2. Update state and outputs
-        self.update_batch_state(self.batch1, v1)
-        self.update_batch_state(self.batch2, v2)
+        if self.batch1.status != "COMPLETED":
+            self.update_batch_state(self.batch1, v1)
+        if self.batch2.status != "COMPLETED":
+            self.update_batch_state(self.batch2, v2)
 
         # Safety Check: PSU channel total overcurrent protection (strict limit)
-        if self.batch1.current_reading > self.max_current:
+        if self.batch1.status != "COMPLETED" and self.batch1.current_reading > self.max_current:
             raise ValueError(
                 f"CRITICAL SAFETY VIOLATION: PSU Channel 1 current {self.batch1.current_reading:.3f} A "
                 f"exceeded safety limit of {self.max_current:.3f} A! "
                 f"Aborting immediately."
             )
-        if self.batch2.current_reading > self.max_current:
+        if self.batch2.status != "COMPLETED" and self.batch2.current_reading > self.max_current:
             raise ValueError(
                 f"CRITICAL SAFETY VIOLATION: PSU Channel 2 current {self.batch2.current_reading:.3f} A "
                 f"exceeded safety limit of {self.max_current:.3f} A! "
@@ -400,20 +412,29 @@ class BalancerApp:
             )
 
         # Safety Check: Calculated individual cell overcurrent protection
-        currents1 = self.calculate_cell_currents(
-            all_voltages[:8], self.batch1.active_cells, self.batch1.current_reading
-        )
-        currents2 = self.calculate_cell_currents(
-            all_voltages[8:], [c - 8 for c in self.batch2.active_cells], self.batch2.current_reading
-        )
-        for idx in range(16):
-            i_cell = (currents1[idx] if idx < 8 else currents2[idx - 8])
-            if i_cell > self.max_cell_current:
-                raise ValueError(
-                    f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 1} is {i_cell:.3f} A, "
-                    f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A! "
-                    f"Aborting immediately."
-                )
+        if self.batch1.status != "COMPLETED":
+            currents1 = self.calculate_cell_currents(
+                v1, self.batch1.active_cells, self.batch1.current_reading
+            )
+            for idx in range(8):
+                if currents1[idx] > self.max_cell_current:
+                    raise ValueError(
+                        f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 1} is {currents1[idx]:.3f} A, "
+                        f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A! "
+                        f"Aborting immediately."
+                    )
+
+        if self.batch2.status != "COMPLETED":
+            currents2 = self.calculate_cell_currents(
+                v2, [c - 8 for c in self.batch2.active_cells], self.batch2.current_reading
+            )
+            for idx in range(8):
+                if currents2[idx] > self.max_cell_current:
+                    raise ValueError(
+                        f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 9} is {currents2[idx]:.3f} A, "
+                        f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A! "
+                        f"Aborting immediately."
+                    )
 
         # 3. Render dashboard
         self.print_dashboard(all_voltages)
@@ -507,6 +528,12 @@ def main() -> None:
         default=1.2,
         help="Maximum safety individual cell current limit in Amperes (default: 1.2)",
     )
+    parser.add_argument(
+        "--batches",
+        choices=["1", "2", "both"],
+        default="both",
+        help="Select which cell batch to balance: 1 (bottom 8), 2 (top 8), or both (default)",
+    )
 
     args = parser.parse_args()
 
@@ -520,6 +547,7 @@ def main() -> None:
         max_voltage=args.max_voltage,
         max_current=args.max_current,
         max_cell_current=args.max_cell_current,
+        batches=args.batches,
     )
     app.run()
 

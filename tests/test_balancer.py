@@ -102,6 +102,20 @@ class BalancerAppTests(unittest.TestCase):
                 with self.assertRaises(ValueError) as ctx:
                     app.step()
         self.assertIn("exceeded individual cell current safety limit of 1.200 A", str(ctx.exception))
+    def test_batch_filtering(self) -> None:
+        # Initialize app with batches="1" (meaning Batch 2 is skipped/completed)
+        app = BalancerApp(simulated=True, batches="1")
+        self.assertEqual(app.batch2.status, "COMPLETED")
+        self.assertEqual(app.batch1.status, "MONITORING")
+
+        # Mock measure_cell_voltages to verify that it is only called for batch1
+        with patch.object(app, 'measure_cell_voltages', return_value=[3.20] * 8) as mock_measure:
+            # We mock print_dashboard so it doesn't try to output to terminal
+            with patch.object(app, 'print_dashboard'):
+                app.step()
+            
+            # Should only measure batch1 cell voltages
+            mock_measure.assert_called_once_with(app.batch1)
 
 
 if __name__ == "__main__":

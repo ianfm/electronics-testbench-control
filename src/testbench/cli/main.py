@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
+from testbench.discovery import DiscoveryConfig, discover_instruments
 from testbench.dmm.keithley_2110 import Keithley2110
 from testbench.dmm.rigol_dm3058e import RigolDM3058E
 from testbench.psu.siglent_spd1305x import SiglentSPD1305X
@@ -20,6 +22,83 @@ PSU_MODELS = {
 }
 
 
+def _add_discovery_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--subnet",
+        action="append",
+        default=[],
+        help="IPv4 subnet to scan; repeat as needed (default: active local subnets)",
+    )
+    parser.add_argument(
+        "--no-network-scan",
+        action="store_true",
+        help="Use cached and VISA-enumerated resources only",
+    )
+    parser.add_argument(
+        "--connect-timeout",
+        type=float,
+        default=0.25,
+        help="TCP port-probe timeout in seconds (default: 0.25)",
+    )
+    parser.add_argument(
+        "--idn-timeout-ms",
+        type=int,
+        default=2000,
+        help="Timeout for each *IDN? attempt (default: 2000)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=64,
+        help="Concurrent TCP probes (default: 64)",
+    )
+    parser.add_argument(
+        "--max-hosts",
+        type=int,
+        default=1024,
+        help="Maximum hosts allowed in each automatically scanned subnet",
+    )
+    parser.add_argument(
+        "--raw-scpi-port",
+        action="append",
+        type=int,
+        default=[],
+        help="Raw SCPI TCP port; repeat as needed (default: 5025)",
+    )
+    parser.add_argument(
+        "--filter",
+        default="",
+        help="Optional VISA resource filter",
+    )
+    parser.add_argument(
+        "--include-raw",
+        action="store_true",
+        help="Probe USB RAW resources returned by VISA",
+    )
+    parser.add_argument(
+        "--include-serial",
+        action="store_true",
+        help="Probe serial resources returned by VISA",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Do not read or update the successful-resource cache",
+    )
+    parser.add_argument(
+        "--cache",
+        type=Path,
+        help="Override the discovery cache path",
+    )
+    parser.add_argument(
+        "--show-failures",
+        action="store_true",
+        help="Print resources and network endpoints that failed identification",
+    )
+    # Compatibility with the former examples/list_devices.py interface.
+    parser.add_argument("--idn", action="store_true", help=argparse.SUPPRESS)
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Testbench instrument helper CLI")
     sub = parser.add_subparsers(dest="domain", required=True)
@@ -35,11 +114,19 @@ def make_parser() -> argparse.ArgumentParser:
     psu.add_argument("--set-current", type=float)
     psu.add_argument("--power", choices=["on", "off"])
 
+    discover = sub.add_parser(
+        "discover", help="Identify instruments using VISA and LAN fallbacks"
+    )
+    _add_discovery_arguments(discover)
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = make_parser().parse_args(argv)
+
+    if args.domain == "discover":
+        return _run_discovery(args)
 
     if args.domain == "dmm":
         cls = DMM_MODELS[args.model]
@@ -75,6 +162,53 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     return 1
+
+
+def _run_discovery(args: argparse.Namespace) -> int:
+    config_kwargs = {
+        "visa_filter": args.filter,
+        "include_raw_usb": args.include_raw,
+        "include_serial": args.include_serial,
+        "scan_network": not args.no_network_scan,
+        "subnets": tuple(args.subnet),
+        "raw_scpi_ports": tuple(sorted({5025, *args.raw_scpi_port})),
+        "connect_timeout_s": args.connect_timeout,
+        "idn_timeout_ms": args.idn_timeout_ms,
+        "workers": args.workers,
+        "max_network_hosts": args.max_hosts,
+        "use_cache": not args.no_cache,
+    }
+    if args.cache is not None:
+        config_kwargs["cache_path"] = args.cache
+
+    report = discover_instruments(DiscoveryConfig(**config_kwargs))
+    devices = report.identified_devices
+    if not devices:
+        print("No instruments identified")
+    else:
+        print(f"Identified {len(devices)} instrument(s):")
+        for device in devices:
+            identity = device.identity
+            details = f"{identity.manufacturer}, {identity.model}"
+            if identity.serial:
+                details += f", serial {identity.serial}"
+            if identity.firmware:
+                details += f", firmware {identity.firmware}"
+            print(f"- {details}")
+            for resource in device.resources:
+                print(f"  {resource}")
+
+    failures = [attempt for attempt in report.attempts if attempt.outcome == "failed"]
+    if args.show_failures and failures:
+        print("Identification failures:")
+        for attempt in failures:
+            print(f"- {attempt.resource} [{attempt.source}]: {attempt.error}")
+
+    if report.warnings:
+        print("Discovery warnings:")
+        for warning in report.warnings:
+            print(f"- {warning}")
+    return 0 if devices else 1
 
 
 if __name__ == "__main__":

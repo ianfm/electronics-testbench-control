@@ -19,8 +19,8 @@ SCPI-based drivers and helper scripts for common lab instruments (e.g., Rigol DM
 
 3) **Verify discovery**
    ```bash
-   python3 examples/list_devices.py --idn
-   # should print INSTR entries for connected devices
+   testbench discover
+   # combines VISA enumeration with bounded LAN fallbacks and *IDN? checks
    ```
 
 4) **Try a command**
@@ -37,4 +37,6 @@ SCPI-based drivers and helper scripts for common lab instruments (e.g., Rigol DM
 - The `install/99-visa.rules` udev rule plus `plugdev` group membership are required for non-root USB access; `install/setup_system.sh` applies them.
 - If NI-VISA is installed, PyVISA will use it; otherwise `pyvisa-py` handles USB/LAN via libusb.
 - Device drivers live under `src/testbench/**`; add new instruments by subclassing the domain interfaces in `src/testbench/domains/`.
+- Discovery failure modes, fallback behavior, and scope controls are documented
+  in [`docs/discovery.md`](docs/discovery.md).
 - These instructions are tested on Ubuntu 22.04.

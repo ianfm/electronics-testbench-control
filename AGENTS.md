@@ -70,6 +70,9 @@ query delays, raw reads, omitted readbacks, and command-specific settling time.
   validation.
 - Keep hardware tests explicit. Clearly identify tests that may reset an
   instrument, change a setpoint, switch a route, or enable an output.
+- A normal instrument discovery pass should complete within 10 seconds on the
+  bench network. Treat repeatable runs over that limit as a performance defect
+  and optimize or narrow the discovery work before adding more probes.
 
 ## Architecture direction
 

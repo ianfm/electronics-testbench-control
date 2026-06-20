@@ -4,6 +4,7 @@ import argparse
 import time
 
 from testbench.binding import bind_driver, matching_device
+from testbench.core.formatters import format_engineering
 from testbench.daq.rigol_m300 import RigolM300
 from testbench.discovery import discover_instruments
 
@@ -76,7 +77,7 @@ def main() -> None:
             # Print results formatted
             for i, ch in enumerate(channels):
                 val = readings[i]
-                print(f"  Channel {ch}: {val:+.9E} V")
+                print(f"  Channel {ch}: {format_engineering(val, 'V')}")
 
             print(f"Scan completed in {elapsed:.3f} seconds")
 

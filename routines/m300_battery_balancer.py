@@ -554,9 +554,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--batches",
-        choices=["1", "2", "both"],
+        choices=["1", "2", "both", "4/4"],
         default="both",
-        help="Select which cell batch to balance: 1 (bottom 8), 2 (top 8), or both (default)",
+        help="Select which cell batch to balance: 1 (bottom 8), 2 (top 8), both (default), or 4/4 (bottom 4/top 4 split)",
     )
 
     args = parser.parse_args()

@@ -324,6 +324,16 @@ def _run_discovery(args: argparse.Namespace) -> int:
         print("Discovery warnings:")
         for warning in report.warnings:
             print(f"- {warning}")
+
+    # Check for stale USB devices
+    stale_usb_detected = any(
+        attempt.outcome == "failed" and attempt.resource.startswith("USB")
+        for attempt in report.attempts
+    )
+    if stale_usb_detected:
+        print("\nWARNING: One or more USB instruments failed to respond to discovery.")
+        print("Recommendation: Run 'testbench reset-usb' to clear locked USB endpoints.")
+
     return 0 if devices else 1
 
 
@@ -443,6 +453,16 @@ def _run_verification(args: argparse.Namespace) -> int:
         print(f"{reg.name:<20} | {status:<8} | {endpoint[:28]:<30} | {details}")
 
     print("=" * 80)
+
+    # Check for stale USB devices
+    stale_usb_detected = any(
+        attempt.outcome == "failed" and attempt.resource.startswith("USB")
+        for attempt in report.attempts
+    )
+    if stale_usb_detected:
+        print("\nWARNING: One or more USB instruments failed to respond to discovery.")
+        print("Recommendation: Run verification with the --reset-usb flag:")
+        print("    testbench verify --reset-usb")
 
     if not verified_any:
         print("No registered instruments were found or configured.")

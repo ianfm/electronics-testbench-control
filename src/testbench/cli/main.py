@@ -151,8 +151,17 @@ def make_parser() -> argparse.ArgumentParser:
     )
     _add_discovery_arguments(discover)
 
-    sub.add_parser(
+    verify = sub.add_parser(
         "verify", help="Verify the bench setup by running self-tests on all connected instruments"
+    )
+    verify.add_argument(
+        "--reset-usb",
+        action="store_true",
+        help="Perform a USB bus reset on all USB instruments before verifying",
+    )
+
+    sub.add_parser(
+        "reset-usb", help="Reset all connected USB test instruments to clear locked endpoints"
     )
 
     return parser
@@ -165,7 +174,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run_discovery(args)
 
     if args.domain == "verify":
-        return _run_verification()
+        return _run_verification(args)
+
+    if args.domain == "reset-usb":
+        return _run_usb_reset()
 
     if args.domain == "dmm":
         cls = DMM_MODELS[args.model]
@@ -328,8 +340,13 @@ def _guess_driver_for_resource(resource: str) -> str | None:
     return None
 
 
-def _run_verification() -> int:
+def _run_verification(args: argparse.Namespace) -> int:
     import os
+
+    if args.reset_usb:
+        from testbench.core.usb_reset import reset_usb_instruments
+        print("Resetting USB instruments on the bench...")
+        reset_usb_instruments()
 
     print("Discovering bench instruments...")
     report = discover_instruments()
@@ -437,6 +454,25 @@ def _run_verification() -> int:
 
     print("Verification completed successfully. All self-tests passed!")
     return 0
+
+
+def _run_usb_reset() -> int:
+    from testbench.core.usb_reset import reset_usb_instruments
+
+    print("Scanning USB bus for supported testbench instruments...")
+    results = reset_usb_instruments()
+    if not results:
+        print("No supported USB instruments found on the bus.")
+        return 0
+
+    print("\nReset results:")
+    failed = False
+    for desc, outcome in results.items():
+        print(f"- {desc}: {outcome}")
+        if "FAILED" in outcome:
+            failed = True
+
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

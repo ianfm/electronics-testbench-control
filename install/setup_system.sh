@@ -47,5 +47,23 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "${SHELL}" == */bash* ]]; then
+  echo "Setting up bash autocomplete for testbench..."
+  if ! grep -q "testbench CLI autocompletion" ~/.bashrc; then
+    cat << EOF >> ~/.bashrc
+
+# testbench CLI autocompletion
+if [ -f "${REPO_DIR}/.venv/bin/register-python-argcomplete" ]; then
+    eval "\$("${REPO_DIR}/.venv/bin/register-python-argcomplete" testbench .venv/bin/testbench)"
+fi
+EOF
+    echo "Autocomplete added to ~/.bashrc"
+  else
+    echo "Autocomplete already configured in ~/.bashrc"
+  fi
+fi
+
 echo "Done. Unplug and replug instruments. Verify with: python3 examples/list_devices.py"
+
 

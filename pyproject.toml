@@ -15,7 +15,8 @@ dependencies = [
   "pyvisa-py",
   "psutil",
   "zeroconf",
-  "pyusb"
+  "pyusb",
+  "argcomplete"
 ]
 
 [project.optional-dependencies]

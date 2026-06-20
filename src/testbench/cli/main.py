@@ -124,12 +124,12 @@ def make_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="domain", required=True)
 
     dmm = sub.add_parser("dmm", help="Digital multimeter actions")
-    dmm.add_argument("--model", choices=DMM_MODELS.keys(), required=True)
+    dmm.add_argument("--model", choices=DMM_MODELS.keys())
     dmm.add_argument("--measure", choices=["voltage", "current", "resistance"])
     _add_resource_arguments(dmm)
 
     psu = sub.add_parser("psu", help="Power supply actions")
-    psu.add_argument("--model", choices=PSU_MODELS.keys(), required=True)
+    psu.add_argument("--model", choices=PSU_MODELS.keys())
     psu.add_argument("--channel", type=int, default=1)
     psu.add_argument("--set-voltage", type=float)
     psu.add_argument("--set-current", type=float)
@@ -142,7 +142,7 @@ def make_parser() -> argparse.ArgumentParser:
     _add_resource_arguments(psu)
 
     daq = sub.add_parser("daq", help="Data acquisition and switch actions")
-    daq.add_argument("--model", choices=DAQ_MODELS.keys(), required=True)
+    daq.add_argument("--model", choices=DAQ_MODELS.keys())
     daq.add_argument("--list-modules", action="store_true")
     daq.add_argument("--measure-voltage", type=int, metavar="CHANNEL")
     _add_resource_arguments(daq)
@@ -187,26 +187,24 @@ def main(argv: list[str] | None = None) -> int:
         return _run_usb_reset()
 
     if args.domain == "dmm":
-        cls = DMM_MODELS[args.model]
-        dmm = _connect_model(cls, args.model, args)
+        dmm = _resolve_and_connect_instrument("dmm", DMM_MODELS, args)
         if not dmm.online():
-            print("DMM not found")
+            print("DMM not found", file=sys.stderr)
             return 1
         if args.measure == "voltage":
-            print(dmm.measure_voltage_dc())
+            print(format_engineering(dmm.measure_voltage_dc(), "V"))
         elif args.measure == "current":
-            print(dmm.measure_current_dc())
+            print(format_engineering(dmm.measure_current_dc(), "A"))
         elif args.measure == "resistance":
-            print(dmm.measure_resistance())
+            print(format_engineering(dmm.measure_resistance(), "Ohm"))
         else:
-            print("No measurement requested")
+            print("No measurement requested", file=sys.stderr)
         return 0
 
     if args.domain == "psu":
-        cls = PSU_MODELS[args.model]
-        psu = _connect_model(cls, args.model, args)
+        psu = _resolve_and_connect_instrument("psu", PSU_MODELS, args)
         if not psu.online():
-            print("PSU not found")
+            print("PSU not found", file=sys.stderr)
             return 1
         ch = args.channel
         if args.set_voltage is not None:
@@ -223,14 +221,14 @@ def main(argv: list[str] | None = None) -> int:
             if val is not None:
                 print(f"{val} V")
             else:
-                print("Failed to read voltage")
+                print("Failed to read voltage", file=sys.stderr)
                 return 1
         elif args.measure == "current":
             val = psu.get_current(ch)
             if val is not None:
                 print(f"{val} A")
             else:
-                print("Failed to read current")
+                print("Failed to read current", file=sys.stderr)
                 return 1
 
         if (
@@ -239,14 +237,13 @@ def main(argv: list[str] | None = None) -> int:
             and args.power is None
             and args.measure is None
         ):
-            print("No PSU action requested")
+            print("No PSU action requested", file=sys.stderr)
         return 0
 
     if args.domain == "daq":
-        cls = DAQ_MODELS[args.model]
-        daq = _connect_model(cls, args.model, args)
+        daq = _resolve_and_connect_instrument("daq", DAQ_MODELS, args)
         if not daq.online():
-            print("DAQ not found")
+            print("DAQ not found", file=sys.stderr)
             return 1
         if args.list_modules:
             for slot, module in daq.module_inventory().items():
@@ -256,12 +253,111 @@ def main(argv: list[str] | None = None) -> int:
                 )
         if args.measure_voltage is not None:
             reading = daq.measure_voltage_dc(args.measure_voltage)
-            print(f"{reading} V")
+            print(format_engineering(reading, "V"))
         if not args.list_modules and args.measure_voltage is None:
-            print("No DAQ action requested")
+            print("No DAQ action requested", file=sys.stderr)
         return 0
 
     return 1
+
+
+def _detect_model_from_resource(resource: str, domain: str) -> str | None:
+    """Attempt to detect the matching model name for a given resource by querying *IDN?."""
+    import pyvisa
+    from testbench.discovery import DeviceIdentity
+    from testbench.binding import DRIVER_REGISTRATIONS
+    try:
+        rm = pyvisa.ResourceManager()
+        try:
+            instr = rm.open_resource(
+                resource,
+                open_timeout=1500,
+                timeout=1500,
+                write_termination="\n",
+                read_termination="\n"
+            )
+            try:
+                idn = instr.query("*IDN?")
+                identity = DeviceIdentity.parse(idn)
+                for reg in DRIVER_REGISTRATIONS:
+                    if reg.domain == domain and reg.matches(identity):
+                        return reg.name
+            finally:
+                instr.close()
+        finally:
+            rm.close()
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_and_connect_instrument(
+    domain: str,
+    models_dict: dict[str, type],
+    args: argparse.Namespace
+):
+    """Resolve the instrument class/model (dynamically if --model is omitted) and connect."""
+    if args.model:
+        cls = models_dict[args.model]
+        return _connect_model(cls, args.model, args)
+
+    # --model was not specified.
+    # Case 1: --resource was specified.
+    if args.resource:
+        detected_model = _detect_model_from_resource(args.resource, domain)
+        if detected_model:
+            print(f"(Auto-detected model: {detected_model})")
+            cls = models_dict[detected_model]
+            return _connect_model(cls, detected_model, args)
+        else:
+            print(
+                f"Error: Could not identify model from resource '{args.resource}'. "
+                f"Please specify --model.",
+                file=sys.stderr
+            )
+            sys.exit(1)
+
+    # Case 2: No resource specified, we must discover.
+    print(f"Discovering connected {domain.upper()} instruments...")
+    report = discover_instruments()
+
+    matching_regs = [reg for reg in DRIVER_REGISTRATIONS if reg.domain == domain]
+    discovered_matches = []
+    for device in report.identified_devices:
+        for reg in matching_regs:
+            if reg.matches(device.identity):
+                discovered_matches.append((reg.name, reg.driver_class, device))
+
+    if len(discovered_matches) == 1:
+        model_name, driver_class, device = discovered_matches[0]
+        print(f"(Auto-discovered connected instrument: {model_name})")
+        return bind_driver(model_name, device)
+
+    if len(discovered_matches) > 1:
+        print(
+            f"Error: Multiple {domain.upper()} instruments discovered on the bench:",
+            file=sys.stderr
+        )
+        for name, _, device in discovered_matches:
+            print(f"  - {name} at {device.preferred_resource}", file=sys.stderr)
+        print("Please specify the model using: --model <model>", file=sys.stderr)
+        sys.exit(1)
+
+    # Check for stale USB devices
+    stale_usb_detected = any(
+        attempt.outcome == "failed" and attempt.resource.startswith("USB")
+        for attempt in report.attempts
+    )
+    if stale_usb_detected:
+        print("\nWARNING: One or more USB instruments failed to respond to discovery.", file=sys.stderr)
+        print("Recommendation: Run 'testbench reset-usb' to clear locked USB endpoints.", file=sys.stderr)
+
+    print(
+        f"Error: No connected {domain.upper()} instrument was discovered. "
+        f"Please ensure it is connected and powered on, or specify the model with --model.",
+        file=sys.stderr
+    )
+    sys.exit(1)
 
 
 def _connect_model(cls, model_name: str, args: argparse.Namespace):

@@ -120,6 +120,36 @@ class RigolM300(ScpiDAQ):
         self._validate_channel(channel)
         return bool(int(self.driver.query(f"ROUT:OPEN? (@{channel})", cast=int)))
 
+    def channel_is_closed(self, channel: int) -> bool:
+        self._validate_channel(channel)
+        return bool(int(self.driver.query(f"ROUT:CLOSE? (@{channel})", cast=int)))
+
+    def close_channel(self, channel: int) -> None:
+        self._validate_channel(channel)
+        self.driver.write(f"ROUT:CLOSE (@{channel})")
+
+    def open_channel(self, channel: int) -> None:
+        self._validate_channel(channel)
+        self.driver.write(f"ROUT:OPEN (@{channel})")
+
+    def close_channels(self, channels: Iterable[int]) -> None:
+        ch_list = list(channels)
+        for ch in ch_list:
+            self._validate_channel(ch)
+        if not ch_list:
+            return
+        ch_list_str = self.driver.format_channel_list(ch_list)
+        self.driver.write(f"ROUT:CLOSE {ch_list_str}")
+
+    def open_channels(self, channels: Iterable[int]) -> None:
+        ch_list = list(channels)
+        for ch in ch_list:
+            self._validate_channel(ch)
+        if not ch_list:
+            return
+        ch_list_str = self.driver.format_channel_list(ch_list)
+        self.driver.write(f"ROUT:OPEN {ch_list_str}")
+
     @classmethod
     def _validate_slot(cls, slot: int) -> None:
         if slot not in cls.SLOTS:

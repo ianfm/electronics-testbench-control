@@ -249,6 +249,72 @@ class CLITests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         mock_driver.measure_voltage_dc.assert_called_once_with(201)
 
+    @patch("testbench.cli.main.discover_instruments")
+    @patch("testbench.cli.main.bind_driver")
+    def test_daq_close_channel(self, mock_bind, mock_discover) -> None:
+        report = DiscoveryReport()
+        identity = DeviceIdentity.parse("RIGOL TECHNOLOGIES,M300,SERIAL,01")
+        device = DiscoveredDevice(identity=identity, resources=["TCPIP::192.0.2.20::INSTR"])
+        report.devices[identity.key] = device
+        mock_discover.return_value = report
+
+        mock_driver = MagicMock()
+        mock_driver.online.return_value = True
+        mock_bind.return_value = mock_driver
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            exit_code = main(["daq", "close-channel", "301"])
+
+        output = mock_stdout.getvalue()
+        self.assertIn("Channel 301 closed successfully.", output)
+        self.assertEqual(exit_code, 0)
+        mock_driver.close_channel.assert_called_once_with(301)
+
+    @patch("testbench.cli.main.discover_instruments")
+    @patch("testbench.cli.main.bind_driver")
+    def test_daq_open_channel(self, mock_bind, mock_discover) -> None:
+        report = DiscoveryReport()
+        identity = DeviceIdentity.parse("RIGOL TECHNOLOGIES,M300,SERIAL,01")
+        device = DiscoveredDevice(identity=identity, resources=["TCPIP::192.0.2.20::INSTR"])
+        report.devices[identity.key] = device
+        mock_discover.return_value = report
+
+        mock_driver = MagicMock()
+        mock_driver.online.return_value = True
+        mock_bind.return_value = mock_driver
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            exit_code = main(["daq", "open-channel", "301"])
+
+        output = mock_stdout.getvalue()
+        self.assertIn("Channel 301 opened successfully.", output)
+        self.assertEqual(exit_code, 0)
+        mock_driver.open_channel.assert_called_once_with(301)
+
+    @patch("testbench.cli.main.discover_instruments")
+    @patch("testbench.cli.main.bind_driver")
+    def test_daq_channel_status(self, mock_bind, mock_discover) -> None:
+        report = DiscoveryReport()
+        identity = DeviceIdentity.parse("RIGOL TECHNOLOGIES,M300,SERIAL,01")
+        device = DiscoveredDevice(identity=identity, resources=["TCPIP::192.0.2.20::INSTR"])
+        report.devices[identity.key] = device
+        mock_discover.return_value = report
+
+        mock_driver = MagicMock()
+        mock_driver.online.return_value = True
+        mock_driver.channel_is_open.return_value = False
+        mock_driver.channel_is_closed.return_value = True
+        mock_bind.return_value = mock_driver
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            exit_code = main(["daq", "channel-status", "301"])
+
+        output = mock_stdout.getvalue()
+        self.assertIn("Channel 301 status: CLOSED", output)
+        self.assertEqual(exit_code, 0)
+        mock_driver.channel_is_open.assert_called_once_with(301)
+        mock_driver.channel_is_closed.assert_called_once_with(301)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -102,6 +102,26 @@ class RigolM300Tests(unittest.TestCase):
         instrument.clear_scan()
         self.assertEqual(driver.writes, ["ROUT:SCAN (@)"])
 
+    def test_channel_control_open_close(self) -> None:
+        instrument, driver = self.make_instrument()
+        driver.responses["ROUT:OPEN? (@201)"] = "1"
+        driver.responses["ROUT:CLOSE? (@201)"] = "0"
+
+        self.assertTrue(instrument.channel_is_open(201))
+        self.assertFalse(instrument.channel_is_closed(201))
+
+        instrument.close_channel(201)
+        self.assertEqual(driver.writes[-1], "ROUT:CLOSE (@201)")
+
+        instrument.open_channel(201)
+        self.assertEqual(driver.writes[-1], "ROUT:OPEN (@201)")
+
+        instrument.close_channels([201, 202])
+        self.assertEqual(driver.writes[-1], "ROUT:CLOSE (@201,202)")
+
+        instrument.open_channels([201, 202])
+        self.assertEqual(driver.writes[-1], "ROUT:OPEN (@201,202)")
+
     def test_invalid_channel_is_rejected_without_io(self) -> None:
         instrument, driver = self.make_instrument()
         with self.assertRaises(ValueError):

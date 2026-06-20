@@ -161,6 +161,15 @@ def make_parser() -> argparse.ArgumentParser:
     daq_measure = daq_sub.add_parser("measure-voltage", help="Measure DC voltage on a channel")
     daq_measure.add_argument("channel", type=int, metavar="CHANNEL", help="Channel number (e.g. 201)")
 
+    daq_close = daq_sub.add_parser("close-channel", help="Close a switch/multiplexer channel")
+    daq_close.add_argument("channel", type=int, metavar="CHANNEL", help="Channel number (e.g. 301)")
+
+    daq_open = daq_sub.add_parser("open-channel", help="Open a switch/multiplexer channel")
+    daq_open.add_argument("channel", type=int, metavar="CHANNEL", help="Channel number (e.g. 301)")
+
+    daq_status = daq_sub.add_parser("channel-status", help="Query whether a channel is open or closed")
+    daq_status.add_argument("channel", type=int, metavar="CHANNEL", help="Channel number (e.g. 301)")
+
     discover = sub.add_parser(
         "discover", help="Identify instruments using VISA and LAN fallbacks"
     )
@@ -260,6 +269,17 @@ def main(argv: list[str] | None = None) -> int:
         elif args.action == "measure-voltage":
             reading = daq.measure_voltage_dc(args.channel)
             print(format_engineering(reading, "V"))
+        elif args.action == "close-channel":
+            daq.close_channel(args.channel)
+            print(f"Channel {args.channel} closed successfully.")
+        elif args.action == "open-channel":
+            daq.open_channel(args.channel)
+            print(f"Channel {args.channel} opened successfully.")
+        elif args.action == "channel-status":
+            is_open = daq.channel_is_open(args.channel)
+            is_closed = daq.channel_is_closed(args.channel)
+            status_str = "OPEN" if is_open else "CLOSED" if is_closed else "UNKNOWN"
+            print(f"Channel {args.channel} status: {status_str}")
         return 0
 
     return 1

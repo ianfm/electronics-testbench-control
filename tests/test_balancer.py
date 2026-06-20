@@ -185,5 +185,28 @@ class BalancerAppTests(unittest.TestCase):
             self.assertFalse(app.trigger_ocv_next)
 
 
+    def test_completed_batch_retains_last_voltages(self) -> None:
+        app = BalancerApp(simulated=True, batches="both")
+        # Step 1: Normal step, record voltages
+        with patch.object(app, 'measure_cell_voltages') as mock_measure:
+            mock_measure.side_effect = [[3.59]*8, [3.20]*8]
+            with patch.object(app, 'print_dashboard') as mock_print:
+                app.step()
+                # Dashboard should receive 3.59V for batch 1, 3.20V for batch 2
+                mock_print.assert_called_once_with([3.59]*8 + [3.20]*8)
+
+        # Set batch 1 to completed
+        app.batch1.status = "COMPLETED"
+        app.batch1.last_voltages = [3.59]*8
+
+        # Step 2: Batch 1 is COMPLETED, so it shouldn't measure batch 1, but should reuse its voltages
+        with patch.object(app, 'measure_cell_voltages') as mock_measure:
+            mock_measure.side_effect = [[3.21]*8] # only batch 2 is measured
+            with patch.object(app, 'print_dashboard') as mock_print:
+                app.step()
+                # Dashboard should show preserved 3.59V for batch 1, and new 3.21V for batch 2
+                mock_print.assert_called_once_with([3.59]*8 + [3.21]*8)
+
+
 if __name__ == "__main__":
     unittest.main()

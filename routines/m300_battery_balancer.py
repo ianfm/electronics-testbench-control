@@ -318,8 +318,15 @@ class BalancerApp:
 
             # Limit total current so that the lowest cell current doesn't exceed self.max_cell_current
             i_total_limit = M * self.max_cell_current - (sum_v - M * v_min) / R
-            i_total_limit = max(0.0, i_total_limit)
-            batch.current_set = min(batch.current_set, i_total_limit)
+            
+            # If the calculated current limit is too low, fall back to single cell charging
+            if i_total_limit < 0.3:
+                weakest_idx = voltages.index(v_min)
+                active_indices = [weakest_idx]
+                batch.active_cells = [weakest_idx + 1 + offset]
+                batch.current_set = min(self.max_cell_current, i_cell)
+            else:
+                batch.current_set = min(batch.current_set, i_total_limit)
 
         batch.status = "CHARGING"
 
@@ -501,40 +508,67 @@ class BalancerApp:
                 else:
                     self.psu_overcurrent_cycles[batch.psu_channel] = 0
 
-        # Safety Check: Calculated individual cell overcurrent protection (debounced)
+        # Safety Check: Calculated individual cell overcurrent protection (debounced & throttled)
         if self.batch1.status != "COMPLETED":
             currents1 = self.calculate_cell_currents(
                 v1, self.batch1.active_cells, self.batch1.current_reading
             )
-            for idx in range(len(v1)):
-                if currents1[idx] > self.max_cell_current:
-                    self.cell_overcurrent_cycles[idx] += 1
-                    if self.cell_overcurrent_cycles[idx] >= 2:
-                        raise ValueError(
-                            f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 1} is {currents1[idx]:.3f} A, "
-                            f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A for 2 consecutive cycles! "
-                            f"Aborting immediately."
-                        )
+            n1 = len(self.batch1.mux_channels)
+            active_idxs1 = [c - 1 for c in self.batch1.active_cells]
+            max_calc_i1 = max(currents1[idx] for idx in active_idxs1) if active_idxs1 else 0.0
+
+            if max_calc_i1 > self.max_cell_current:
+                if self.batch1.current_set > 0.15 and not self.simulated:
+                    throttle_factor = self.max_cell_current / max_calc_i1
+                    new_limit = max(0.1, self.batch1.current_set * throttle_factor * 0.9)
+                    self.batch1.current_set = new_limit
+                    self.psu.set_current(self.batch1.psu_channel, new_limit)
+                    self.cell_overcurrent_cycles[0:n1] = [0] * n1
                 else:
-                    self.cell_overcurrent_cycles[idx] = 0
+                    for idx in range(len(v1)):
+                        if currents1[idx] > self.max_cell_current:
+                            self.cell_overcurrent_cycles[idx] += 1
+                            if self.cell_overcurrent_cycles[idx] >= 2:
+                                raise ValueError(
+                                    f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 1} is {currents1[idx]:.3f} A, "
+                                    f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A for 2 consecutive cycles! "
+                                    f"Aborting immediately."
+                                )
+                        else:
+                            self.cell_overcurrent_cycles[idx] = 0
+            else:
+                self.cell_overcurrent_cycles[0:n1] = [0] * n1
 
         if self.batch2.status != "COMPLETED":
             n1 = len(self.batch1.mux_channels)
             currents2 = self.calculate_cell_currents(
                 v2, [c - n1 for c in self.batch2.active_cells], self.batch2.current_reading
             )
-            for idx in range(len(v2)):
-                global_idx = idx + n1
-                if currents2[idx] > self.max_cell_current:
-                    self.cell_overcurrent_cycles[global_idx] += 1
-                    if self.cell_overcurrent_cycles[global_idx] >= 2:
-                        raise ValueError(
-                            f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {global_idx + 1} is {currents2[idx]:.3f} A, "
-                            f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A for 2 consecutive cycles! "
-                            f"Aborting immediately."
-                        )
+            active_idxs2 = [c - n1 - 1 for c in self.batch2.active_cells]
+            max_calc_i2 = max(currents2[idx] for idx in active_idxs2) if active_idxs2 else 0.0
+
+            if max_calc_i2 > self.max_cell_current:
+                if self.batch2.current_set > 0.15 and not self.simulated:
+                    throttle_factor = self.max_cell_current / max_calc_i2
+                    new_limit = max(0.1, self.batch2.current_set * throttle_factor * 0.9)
+                    self.batch2.current_set = new_limit
+                    self.psu.set_current(self.batch2.psu_channel, new_limit)
+                    self.cell_overcurrent_cycles[n1:n1+len(v2)] = [0] * len(v2)
                 else:
-                    self.cell_overcurrent_cycles[global_idx] = 0
+                    for idx in range(len(v2)):
+                        global_idx = idx + n1
+                        if currents2[idx] > self.max_cell_current:
+                            self.cell_overcurrent_cycles[global_idx] += 1
+                            if self.cell_overcurrent_cycles[global_idx] >= 2:
+                                raise ValueError(
+                                    f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {global_idx + 1} is {currents2[idx]:.3f} A, "
+                                    f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A for 2 consecutive cycles! "
+                                    f"Aborting immediately."
+                                )
+                        else:
+                            self.cell_overcurrent_cycles[global_idx] = 0
+            else:
+                self.cell_overcurrent_cycles[n1:n1+len(v2)] = [0] * len(v2)
 
         # 3. Render dashboard
         self.print_dashboard(all_voltages)

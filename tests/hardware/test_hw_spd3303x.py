@@ -4,8 +4,8 @@ import unittest
 import time
 
 from testbench.binding import bind_driver, matching_device
-from testbench.discovery import discover_instruments
 from testbench.psu.siglent_spd3303x import SiglentSPD3303X
+from tests.hardware.helper import get_discovery_report
 
 
 class SiglentSPD3303XHardwareTest(unittest.TestCase):
@@ -23,7 +23,7 @@ class SiglentSPD3303XHardwareTest(unittest.TestCase):
         if resource:
             cls.psu = SiglentSPD3303X(resource_name=resource)
         else:
-            report = discover_instruments()
+            report = get_discovery_report()
             device = matching_device("siglent-spd3303x", report)
             if device is None:
                 raise unittest.SkipTest("Siglent SPD3303X hardware not found on bench; skipping.")

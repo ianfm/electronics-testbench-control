@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 
 from testbench.binding import bind_driver, matching_device
-from testbench.discovery import discover_instruments
 from testbench.dmm.rigol_dm3058e import RigolDM3058E
+from tests.hardware.helper import get_discovery_report
 
 
 class RigolDM3058EHardwareTest(unittest.TestCase):
@@ -21,7 +21,7 @@ class RigolDM3058EHardwareTest(unittest.TestCase):
         if resource:
             cls.dmm = RigolDM3058E(resource_name=resource)
         else:
-            report = discover_instruments()
+            report = get_discovery_report()
             device = matching_device("rigol-dm3058e", report)
             if device is None:
                 raise unittest.SkipTest("Rigol DM3058E hardware not found on bench; skipping.")

@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 
 from testbench.binding import bind_driver, matching_device
-from testbench.discovery import discover_instruments
 from testbench.dmm.keithley_2110 import Keithley2110
+from tests.hardware.helper import get_discovery_report
 
 
 class Keithley2110HardwareTest(unittest.TestCase):
@@ -23,7 +23,7 @@ class Keithley2110HardwareTest(unittest.TestCase):
             cls.dmm = Keithley2110(resource_name=resource)
         else:
             # Run discovery to locate the device
-            report = discover_instruments()
+            report = get_discovery_report()
             device = matching_device("keithley-2110", report)
             if device is None:
                 raise unittest.SkipTest("Keithley 2110 hardware not found on bench; skipping.")

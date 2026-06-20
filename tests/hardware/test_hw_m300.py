@@ -4,7 +4,8 @@ import unittest
 
 from testbench.binding import bind_driver, matching_device
 from testbench.daq.rigol_m300 import RigolM300
-from testbench.discovery import discover_instruments
+from testbench.discovery import DiscoveryReport
+from tests.hardware.helper import get_discovery_report
 
 
 class RigolM300HardwareTest(unittest.TestCase):
@@ -22,7 +23,7 @@ class RigolM300HardwareTest(unittest.TestCase):
         if resource:
             cls.daq = RigolM300(resource_name=resource)
         else:
-            report = discover_instruments()
+            report = get_discovery_report()
             device = matching_device("rigol-m300", report)
             if device is None:
                 raise unittest.SkipTest("Rigol M300 hardware not found on bench; skipping.")

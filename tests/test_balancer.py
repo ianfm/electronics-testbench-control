@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 from routines.m300_battery_balancer import BalancerApp, BatchState
 
 
@@ -115,7 +115,7 @@ class BalancerAppTests(unittest.TestCase):
                 app.step()
             
             # Should only measure batch1 cell voltages
-            mock_measure.assert_called_once_with(app.batch1)
+            mock_measure.assert_called_once_with(app.batch1, open_circuit=True)
     def test_batches_split_4_4(self) -> None:
         # Initialize app in "4/4" batches split
         app = BalancerApp(simulated=True, batches="4/4")
@@ -141,6 +141,48 @@ class BalancerAppTests(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             app.step()
         self.assertIn("voltage -0.100 V is negative!", str(ctx.exception))
+
+    def test_periodic_ocv_and_cold_switching(self) -> None:
+        app = BalancerApp(simulated=True, interval=5.0, ocv_interval=60.0)
+        self.assertTrue(app.trigger_ocv_next)
+        
+        # 1. First step should run OCV check (since trigger_ocv_next is True)
+        with patch.object(app, 'measure_cell_voltages', return_value=[3.20] * 8) as mock_measure:
+            with patch.object(app, 'print_dashboard'):
+                app.step()
+            self.assertEqual(
+                mock_measure.call_args_list,
+                [call(app.batch1, open_circuit=True), call(app.batch2, open_circuit=True)]
+            )
+            self.assertFalse(app.trigger_ocv_next)
+
+        # 2. Second step should NOT run OCV check (open_circuit=False)
+        with patch.object(app, 'measure_cell_voltages', return_value=[3.20] * 8) as mock_measure:
+            with patch.object(app, 'print_dashboard'):
+                app.step()
+            self.assertEqual(
+                mock_measure.call_args_list,
+                [call(app.batch1, open_circuit=False), call(app.batch2, open_circuit=False)]
+            )
+
+        # 3. Simulate one of the active cells under charge reaching target voltage (3.60V)
+        # In under-charge measurement, it should trigger OCV on the next step
+        app.batch1.active_cells = [1]
+        app.batch1.status = "CHARGING"
+        with patch.object(app, 'measure_cell_voltages', return_value=[3.60] + [3.20]*7) as mock_measure:
+            with patch.object(app, 'print_dashboard'):
+                app.step()
+            self.assertTrue(app.trigger_ocv_next)
+
+        # 4. The following step should now run an OCV check (open_circuit=True)
+        with patch.object(app, 'measure_cell_voltages', return_value=[3.20] * 8) as mock_measure:
+            with patch.object(app, 'print_dashboard'):
+                app.step()
+            self.assertEqual(
+                mock_measure.call_args_list,
+                [call(app.batch1, open_circuit=True), call(app.batch2, open_circuit=True)]
+            )
+            self.assertFalse(app.trigger_ocv_next)
 
 
 if __name__ == "__main__":

@@ -62,6 +62,7 @@ class BalancerApp:
         max_current: float = 3.2,
         max_cell_current: float = 1.2,
         batches: str = "both",
+        ocv_interval: float = 60.0,
     ) -> None:
         self.target_voltage = target_voltage
         self.balance_delta = balance_delta
@@ -73,6 +74,9 @@ class BalancerApp:
         self.max_current = max_current
         self.max_cell_current = max_cell_current
         self.batches = batches
+        self.ocv_interval = ocv_interval
+        self.last_ocv_time = 0.0
+        self.trigger_ocv_next = True  # Start with an OCV measurement
 
         self.daq: RigolM300 | None = None
         self.psu: SiglentSPD3303X | None = None
@@ -186,8 +190,8 @@ class BalancerApp:
             except Exception as e:
                 print(f"Failed to open M300 actuator relays: {e}")
 
-    def measure_cell_voltages(self, batch: BatchState) -> List[float]:
-        """Measure cell voltages in a batch after opening the charge relays to settle."""
+    def measure_cell_voltages(self, batch: BatchState, open_circuit: bool = True) -> List[float]:
+        """Measure cell voltages in a batch, optionally opening relays to measure OCV."""
         if self.simulated:
             # Return simulated voltages for this batch
             if batch.psu_channel == 1:
@@ -197,9 +201,14 @@ class BalancerApp:
                 indices = range(n1, n1 + len(batch.mux_channels))
             return [self.sim_voltages[i] for i in indices]
 
-        # 1. Open charge relays for this batch to ensure we measure open-circuit/settled voltage
-        self.daq.open_channels(batch.act_channels)
-        time.sleep(1.0)  # Wait 1 second for voltage to settle
+        if open_circuit:
+            # Cold switching: disable PSU output before opening relays
+            self.psu.output_off(batch.psu_channel)
+            time.sleep(0.1)  # wait 100ms for current to decay
+
+            # 1. Open charge relays for this batch to ensure we measure open-circuit/settled voltage
+            self.daq.open_channels(batch.act_channels)
+            time.sleep(1.0)  # Wait 1 second for relay contact settling & battery chemistry settling
 
         # 2. Scan cell voltages using the MUX
         self.daq.setup_scan(batch.mux_channels)
@@ -313,18 +322,22 @@ class BalancerApp:
         if self.simulated:
             batch.current_reading = batch.current_set * random.uniform(0.95, 1.02)
         else:
-            # Configure PSU
+            # Configure PSU settings
             self.psu.set_voltage(batch.psu_channel, batch.voltage_set)
             self.psu.set_current(batch.psu_channel, batch.current_set)
-            self.psu.output_on(batch.psu_channel)
 
             # Map active indices to actual ACT channels
             active_acts = [batch.act_channels[idx] for idx in active_indices]
             inactive_acts = [ch for ch in batch.act_channels if ch not in active_acts]
 
-            # Set relays
+            # Cold switching: change relay states while PSU output is off
             self.daq.open_channels(inactive_acts)
             self.daq.close_channels(active_acts)
+            time.sleep(0.1)  # Wait 100ms for contacts to physically settle
+
+            # Turn PSU output ON after relays are settled
+            self.psu.output_on(batch.psu_channel)
+            time.sleep(0.2)  # Wait 200ms for PSU output loops and ADC to stabilize
 
             # Get actual current readback
             curr = self.psu.get_current(batch.psu_channel)
@@ -399,10 +412,21 @@ class BalancerApp:
         Returns:
             True if charging/balancing is completed for both batches, False otherwise.
         """
-        # 1. Measure cell voltages for active batches
-        v1 = self.measure_cell_voltages(self.batch1) if self.batch1.status != "COMPLETED" else [0.0] * 8
-        v2 = self.measure_cell_voltages(self.batch2) if self.batch2.status != "COMPLETED" else [0.0] * 8
+        current_time = time.time()
+        need_ocv = (
+            self.trigger_ocv_next or
+            self.last_ocv_time == 0.0 or
+            (current_time - self.last_ocv_time) >= self.ocv_interval
+        )
+
+        # 1. Measure cell voltages
+        v1 = self.measure_cell_voltages(self.batch1, open_circuit=need_ocv) if self.batch1.status != "COMPLETED" else [0.0] * 8
+        v2 = self.measure_cell_voltages(self.batch2, open_circuit=need_ocv) if self.batch2.status != "COMPLETED" else [0.0] * 8
         all_voltages = v1 + v2
+
+        if need_ocv:
+            self.trigger_ocv_next = False
+            self.last_ocv_time = current_time
 
         # Safety Check: Individual cell overvoltage and reverse polarity protection
         n1 = len(self.batch1.mux_channels)
@@ -423,10 +447,30 @@ class BalancerApp:
                     )
 
         # 2. Update state and outputs
-        if self.batch1.status != "COMPLETED":
-            self.update_batch_state(self.batch1, v1)
-        if self.batch2.status != "COMPLETED":
-            self.update_batch_state(self.batch2, v2)
+        if need_ocv:
+            # Update state machine and configuration only with fresh OCV measurements
+            if self.batch1.status != "COMPLETED":
+                self.update_batch_state(self.batch1, v1)
+            if self.batch2.status != "COMPLETED":
+                self.update_batch_state(self.batch2, v2)
+        else:
+            # During under-charge steps, we keep relays in place, but update current readbacks
+            for batch in (self.batch1, self.batch2):
+                if batch.status == "CHARGING":
+                    if self.simulated:
+                        batch.current_reading = batch.current_set * random.uniform(0.95, 1.02)
+                    else:
+                        curr = self.psu.get_current(batch.psu_channel)
+                        batch.current_reading = curr if curr is not None else 0.0
+
+            # Check if any active cell voltage under charge reaches target to request OCV check
+            for batch, voltages_batch in [(self.batch1, v1), (self.batch2, v2)]:
+                if batch.status == "CHARGING":
+                    offset = 0 if batch.psu_channel == 1 else len(self.batch1.mux_channels)
+                    for idx, v in enumerate(voltages_batch):
+                        cell_num = idx + 1 + offset
+                        if cell_num in batch.active_cells and v >= self.target_voltage:
+                            self.trigger_ocv_next = True
 
         # Safety Check: PSU channel total overcurrent protection (strict limit)
         if self.batch1.status != "COMPLETED" and self.batch1.current_reading > self.max_current:
@@ -566,6 +610,12 @@ def main() -> None:
         default="both",
         help="Select which cell batch to balance: 1 (bottom 8), 2 (top 8), both (default), or 4/4 (bottom 4/top 4 split)",
     )
+    parser.add_argument(
+        "--ocv-interval",
+        type=float,
+        default=60.0,
+        help="Interval in seconds between open-circuit voltage (OCV) measurements (default: 60.0)",
+    )
 
     args = parser.parse_args()
 
@@ -580,6 +630,7 @@ def main() -> None:
         max_current=args.max_current,
         max_cell_current=args.max_cell_current,
         batches=args.batches,
+        ocv_interval=args.ocv_interval,
     )
     app.run()
 

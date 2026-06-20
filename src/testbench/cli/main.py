@@ -125,27 +125,41 @@ def make_parser() -> argparse.ArgumentParser:
 
     dmm = sub.add_parser("dmm", help="Digital multimeter actions")
     dmm.add_argument("--model", choices=DMM_MODELS.keys())
-    dmm.add_argument("--measure", choices=["voltage", "current", "resistance"])
     _add_resource_arguments(dmm)
+    dmm_sub = dmm.add_subparsers(dest="action", required=True)
+    dmm_measure = dmm_sub.add_parser("measure", help="Measure a quantity")
+    dmm_measure.add_argument("quantity", choices=["voltage", "current", "resistance"])
 
     psu = sub.add_parser("psu", help="Power supply actions")
     psu.add_argument("--model", choices=PSU_MODELS.keys())
-    psu.add_argument("--channel", type=int, default=1)
-    psu.add_argument("--set-voltage", type=float)
-    psu.add_argument("--set-current", type=float)
-    psu.add_argument("--power", choices=["on", "off"])
-    psu.add_argument(
-        "--measure",
-        choices=["voltage", "current"],
-        help="Measure output voltage or current (readback)",
-    )
     _add_resource_arguments(psu)
+    psu_sub = psu.add_subparsers(dest="action", required=True)
+
+    psu_set_v = psu_sub.add_parser("set-voltage", help="Set channel voltage limit")
+    psu_set_v.add_argument("voltage", type=float, help="Voltage in Volts")
+    psu_set_v.add_argument("--channel", type=int, default=1, help="Channel number (default: 1)")
+
+    psu_set_i = psu_sub.add_parser("set-current", help="Set channel current limit")
+    psu_set_i.add_argument("current", type=float, help="Current in Amperes")
+    psu_set_i.add_argument("--channel", type=int, default=1, help="Channel number (default: 1)")
+
+    psu_power = psu_sub.add_parser("power", help="Enable or disable output power")
+    psu_power.add_argument("state", choices=["on", "off"], help="Power state")
+    psu_power.add_argument("--channel", type=int, default=1, help="Channel number (default: 1)")
+
+    psu_measure = psu_sub.add_parser("measure", help="Measure channel voltage or current")
+    psu_measure.add_argument("quantity", choices=["voltage", "current"])
+    psu_measure.add_argument("--channel", type=int, default=1, help="Channel number (default: 1)")
 
     daq = sub.add_parser("daq", help="Data acquisition and switch actions")
     daq.add_argument("--model", choices=DAQ_MODELS.keys())
-    daq.add_argument("--list-modules", action="store_true")
-    daq.add_argument("--measure-voltage", type=int, metavar="CHANNEL")
     _add_resource_arguments(daq)
+    daq_sub = daq.add_subparsers(dest="action", required=True)
+
+    daq_sub.add_parser("list-modules", help="List all installed modules in the DAQ mainframe")
+
+    daq_measure = daq_sub.add_parser("measure-voltage", help="Measure DC voltage on a channel")
+    daq_measure.add_argument("channel", type=int, metavar="CHANNEL", help="Channel number (e.g. 201)")
 
     discover = sub.add_parser(
         "discover", help="Identify instruments using VISA and LAN fallbacks"
@@ -191,14 +205,13 @@ def main(argv: list[str] | None = None) -> int:
         if not dmm.online():
             print("DMM not found", file=sys.stderr)
             return 1
-        if args.measure == "voltage":
-            print(format_engineering(dmm.measure_voltage_dc(), "V"))
-        elif args.measure == "current":
-            print(format_engineering(dmm.measure_current_dc(), "A"))
-        elif args.measure == "resistance":
-            print(format_engineering(dmm.measure_resistance(), "Ohm"))
-        else:
-            print("No measurement requested", file=sys.stderr)
+        if args.action == "measure":
+            if args.quantity == "voltage":
+                print(format_engineering(dmm.measure_voltage_dc(), "V"))
+            elif args.quantity == "current":
+                print(format_engineering(dmm.measure_current_dc(), "A"))
+            elif args.quantity == "resistance":
+                print(format_engineering(dmm.measure_resistance(), "Ohm"))
         return 0
 
     if args.domain == "psu":
@@ -207,37 +220,30 @@ def main(argv: list[str] | None = None) -> int:
             print("PSU not found", file=sys.stderr)
             return 1
         ch = args.channel
-        if args.set_voltage is not None:
-            psu.set_voltage(ch, args.set_voltage)
-        if args.set_current is not None:
-            psu.set_current(ch, args.set_current)
-        if args.power == "on":
-            psu.output_on(ch)
-        elif args.power == "off":
-            psu.output_off(ch)
-
-        if args.measure == "voltage":
-            val = psu.get_voltage(ch)
-            if val is not None:
-                print(f"{val} V")
+        if args.action == "set-voltage":
+            psu.set_voltage(ch, args.voltage)
+        elif args.action == "set-current":
+            psu.set_current(ch, args.current)
+        elif args.action == "power":
+            if args.state == "on":
+                psu.output_on(ch)
             else:
-                print("Failed to read voltage", file=sys.stderr)
-                return 1
-        elif args.measure == "current":
-            val = psu.get_current(ch)
-            if val is not None:
-                print(f"{val} A")
-            else:
-                print("Failed to read current", file=sys.stderr)
-                return 1
-
-        if (
-            args.set_voltage is None
-            and args.set_current is None
-            and args.power is None
-            and args.measure is None
-        ):
-            print("No PSU action requested", file=sys.stderr)
+                psu.output_off(ch)
+        elif args.action == "measure":
+            if args.quantity == "voltage":
+                val = psu.get_voltage(ch)
+                if val is not None:
+                    print(format_engineering(val, "V"))
+                else:
+                    print("Failed to read voltage", file=sys.stderr)
+                    return 1
+            elif args.quantity == "current":
+                val = psu.get_current(ch)
+                if val is not None:
+                    print(format_engineering(val, "A"))
+                else:
+                    print("Failed to read current", file=sys.stderr)
+                    return 1
         return 0
 
     if args.domain == "daq":
@@ -245,17 +251,15 @@ def main(argv: list[str] | None = None) -> int:
         if not daq.online():
             print("DAQ not found", file=sys.stderr)
             return 1
-        if args.list_modules:
+        if args.action == "list-modules":
             for slot, module in daq.module_inventory().items():
                 print(
                     f"{slot}: {module.manufacturer}, {module.model}, "
                     f"{module.serial}, {module.firmware}"
                 )
-        if args.measure_voltage is not None:
-            reading = daq.measure_voltage_dc(args.measure_voltage)
+        elif args.action == "measure-voltage":
+            reading = daq.measure_voltage_dc(args.channel)
             print(format_engineering(reading, "V"))
-        if not args.list_modules and args.measure_voltage is None:
-            print("No DAQ action requested", file=sys.stderr)
         return 0
 
     return 1

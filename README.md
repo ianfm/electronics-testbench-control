@@ -44,8 +44,8 @@ SCPI-based drivers and helper scripts for common lab instruments (e.g., Rigol DM
      ```
    - Inspect M300 modules or measure one configured multiplexer channel:
      ```bash
-     testbench daq --model rigol-m300 --list-modules
-     testbench daq --model rigol-m300 --measure-voltage 201
+     testbench daq list-modules
+     testbench daq measure-voltage 201
      ```
 
 ## Notes

@@ -98,7 +98,7 @@ class CLITests(unittest.TestCase):
         mock_bind.return_value = mock_driver
 
         with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            exit_code = main(["dmm", "--measure", "voltage"])
+            exit_code = main(["dmm", "measure", "voltage"])
 
         output = mock_stdout.getvalue()
         self.assertIn("Discovering connected DMM instruments...", output)
@@ -124,7 +124,7 @@ class CLITests(unittest.TestCase):
 
         with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
             with self.assertRaises(SystemExit) as cm:
-                main(["dmm", "--measure", "voltage"])
+                main(["dmm", "measure", "voltage"])
 
         err_output = mock_stderr.getvalue()
         self.assertIn("Error: Multiple DMM instruments discovered on the bench:", err_output)
@@ -140,7 +140,7 @@ class CLITests(unittest.TestCase):
 
         with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
             with self.assertRaises(SystemExit) as cm:
-                main(["dmm", "--measure", "voltage"])
+                main(["dmm", "measure", "voltage"])
 
         err_output = mock_stderr.getvalue()
         self.assertIn("Error: No connected DMM instrument was discovered.", err_output)
@@ -157,7 +157,7 @@ class CLITests(unittest.TestCase):
         mock_connect.return_value = mock_driver
 
         with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            exit_code = main(["dmm", "--resource", "USB0::1::2::3", "--measure", "voltage"])
+            exit_code = main(["dmm", "--resource", "USB0::1::2::3", "measure", "voltage"])
 
         output = mock_stdout.getvalue()
         self.assertIn("(Auto-detected model: keithley-2110)", output)
@@ -177,6 +177,77 @@ class CLITests(unittest.TestCase):
 
         model = _detect_model_from_resource("USB0::1::2", "dmm")
         self.assertEqual(model, "keithley-2110")
+
+    @patch("testbench.cli.main.discover_instruments")
+    @patch("testbench.cli.main.bind_driver")
+    def test_psu_measure_voltage(self, mock_bind, mock_discover) -> None:
+        report = DiscoveryReport()
+        identity = DeviceIdentity.parse("Siglent Technologies,SPD3303X-E,SERIAL,1.0,V1")
+        device = DiscoveredDevice(identity=identity, resources=["TCPIP::192.0.2.10::INSTR"])
+        report.devices[identity.key] = device
+        mock_discover.return_value = report
+
+        mock_driver = MagicMock()
+        mock_driver.online.return_value = True
+        mock_driver.get_voltage.return_value = 5.012
+        mock_bind.return_value = mock_driver
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            exit_code = main(["psu", "measure", "voltage", "--channel", "1"])
+
+        output = mock_stdout.getvalue()
+        self.assertIn("5.012 V", output)
+        self.assertEqual(exit_code, 0)
+        mock_driver.get_voltage.assert_called_once_with(1)
+
+    @patch("testbench.cli.main.discover_instruments")
+    @patch("testbench.cli.main.bind_driver")
+    def test_daq_list_modules(self, mock_bind, mock_discover) -> None:
+        report = DiscoveryReport()
+        identity = DeviceIdentity.parse("RIGOL TECHNOLOGIES,M300,SERIAL,01")
+        device = DiscoveredDevice(identity=identity, resources=["TCPIP::192.0.2.20::INSTR"])
+        report.devices[identity.key] = device
+        mock_discover.return_value = report
+
+        mock_driver = MagicMock()
+        mock_driver.online.return_value = True
+        
+        module_mock = MagicMock()
+        module_mock.manufacturer = "RIGOL"
+        module_mock.model = "MC3132"
+        module_mock.serial = "SERIAL_M"
+        module_mock.firmware = "1.0"
+        mock_driver.module_inventory.return_value = {200: module_mock}
+        mock_bind.return_value = mock_driver
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            exit_code = main(["daq", "list-modules"])
+
+        output = mock_stdout.getvalue()
+        self.assertIn("200: RIGOL, MC3132, SERIAL_M, 1.0", output)
+        self.assertEqual(exit_code, 0)
+
+    @patch("testbench.cli.main.discover_instruments")
+    @patch("testbench.cli.main.bind_driver")
+    def test_daq_measure_voltage(self, mock_bind, mock_discover) -> None:
+        report = DiscoveryReport()
+        identity = DeviceIdentity.parse("RIGOL TECHNOLOGIES,M300,SERIAL,01")
+        device = DiscoveredDevice(identity=identity, resources=["TCPIP::192.0.2.20::INSTR"])
+        report.devices[identity.key] = device
+        mock_discover.return_value = report
+
+        mock_driver = MagicMock()
+        mock_driver.online.return_value = True
+        mock_driver.measure_voltage_dc.return_value = 0.050499
+        mock_bind.return_value = mock_driver
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            exit_code = main(["daq", "measure-voltage", "201"])
+
+        output = mock_stdout.getvalue()
+        self.assertIn("50.499 mV", output)
+        self.assertEqual(exit_code, 0)
+        mock_driver.measure_voltage_dc.assert_called_once_with(201)
 
 
 if __name__ == "__main__":

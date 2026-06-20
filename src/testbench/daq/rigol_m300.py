@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterable
 
 from testbench.core.scpi import SCPISettings
 from testbench.domains.daq import ScpiDAQ
@@ -78,6 +79,42 @@ class RigolM300(ScpiDAQ):
             return float(self.driver.query("READ?", cast=float))
         finally:
             self.driver.write("ROUT:SCAN (@)")
+
+    def setup_scan(
+        self,
+        channels: Iterable[int],
+        measurement_range: str | float = "AUTO",
+        resolution: str | float = "DEF",
+    ) -> None:
+        """Configure a list of channels for DC voltage measurements and set up the scan.
+
+        This sets the measurement parameters and target scan list, then configures
+        the trigger source to immediate.
+        """
+        ch_list = list(channels)
+        for ch in ch_list:
+            self._validate_channel(ch)
+        if not self.dmm_installed():
+            raise RuntimeError("M300 DMM module is not installed")
+        if not self.dmm_enabled():
+            raise RuntimeError("M300 DMM module is disabled")
+
+        ch_list_str = self.driver.format_channel_list(ch_list)
+        self.driver.write(f"CONF:VOLT:DC {measurement_range},{resolution},{ch_list_str}")
+        self.driver.write(f"ROUT:SCAN {ch_list_str}")
+        self.driver.write("TRIG:SOUR IMM")
+
+    def read_scan(self) -> list[float]:
+        """Trigger the configured scan and return the readings for all channels in the scan list."""
+        if not self.dmm_installed():
+            raise RuntimeError("M300 DMM module is not installed")
+        if not self.dmm_enabled():
+            raise RuntimeError("M300 DMM module is disabled")
+        return self.driver.query_float_list("READ?")
+
+    def clear_scan(self) -> None:
+        """Clear the active scan list to safely open all multiplexer relays."""
+        self.driver.write("ROUT:SCAN (@)")
 
     def channel_is_open(self, channel: int) -> bool:
         self._validate_channel(channel)

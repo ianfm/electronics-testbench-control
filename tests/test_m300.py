@@ -11,6 +11,13 @@ class FakeM300Driver:
         self.settings = settings
         self.resource = None
         self.writes: list[str] = []
+        self.responses = {
+            "INST:DMM:INST?": "1",
+            "INST:DMM?": "1",
+            "READ?": "+7.910755833E-02",
+            "ROUT:OPEN? (@201)": "1",
+            "SYST:CTYP? 100": "RIGOL TECHNOLOGIES,MC3065,SERIAL,01.02.03.04",
+        }
 
     def connect_resource(self, resource_name: str) -> str:
         self.resource = object()
@@ -23,15 +30,18 @@ class FakeM300Driver:
         self.writes.append(command)
 
     def query(self, command: str, cast=None):
-        responses = {
-            "INST:DMM:INST?": "1",
-            "INST:DMM?": "1",
-            "READ?": "+7.910755833E-02",
-            "ROUT:OPEN? (@201)": "1",
-            "SYST:CTYP? 100": "RIGOL TECHNOLOGIES,MC3065,SERIAL,01.02.03.04",
-        }
-        response = responses[command]
+        self.writes.append(command)
+        response = self.responses[command]
         return cast(response) if cast else response
+
+    def query_float_list(self, command: str) -> list[float]:
+        response = self.query(command)
+        return [float(part) for part in response.split(",") if part.strip()]
+
+    @staticmethod
+    def format_channel_list(channels) -> str:
+        inner = ",".join(str(ch) for ch in channels)
+        return f"(@{inner})"
 
 
 class RigolM300Tests(unittest.TestCase):
@@ -55,13 +65,42 @@ class RigolM300Tests(unittest.TestCase):
         self.assertEqual(
             driver.writes,
             [
+                "INST:DMM:INST?",
+                "INST:DMM?",
                 "CONF:VOLT:DC AUTO,DEF,(@201)",
                 "ROUT:SCAN (@201)",
                 "TRIG:SOUR IMM",
+                "READ?",
                 "ROUT:SCAN (@)",
             ],
         )
         self.assertTrue(instrument.channel_is_open(201))
+
+    def test_multichannel_scan_lifecycle(self) -> None:
+        instrument, driver = self.make_instrument()
+        driver.responses["READ?"] = "+1.0,+2.0,+3.0"
+
+        channels = [201, 202, 203]
+        instrument.setup_scan(channels)
+        self.assertEqual(
+            driver.writes,
+            [
+                "INST:DMM:INST?",
+                "INST:DMM?",
+                "CONF:VOLT:DC AUTO,DEF,(@201,202,203)",
+                "ROUT:SCAN (@201,202,203)",
+                "TRIG:SOUR IMM",
+            ]
+        )
+
+        driver.writes.clear()
+        readings = instrument.read_scan()
+        self.assertEqual(readings, [1.0, 2.0, 3.0])
+        self.assertEqual(driver.writes, ["INST:DMM:INST?", "INST:DMM?", "READ?"])
+
+        driver.writes.clear()
+        instrument.clear_scan()
+        self.assertEqual(driver.writes, ["ROUT:SCAN (@)"])
 
     def test_invalid_channel_is_rejected_without_io(self) -> None:
         instrument, driver = self.make_instrument()

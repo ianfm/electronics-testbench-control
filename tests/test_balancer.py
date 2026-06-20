@@ -134,6 +134,13 @@ class BalancerAppTests(unittest.TestCase):
         app.simulate_step(1.0)
         # Check that active voltages are updated
         self.assertGreater(app.sim_voltages[0], 2.90)
+    def test_strict_safety_trips_negative_voltage(self) -> None:
+        app = BalancerApp(simulated=True)
+        # Set a cell voltage to negative
+        app.sim_voltages[0] = -0.1
+        with self.assertRaises(ValueError) as ctx:
+            app.step()
+        self.assertIn("voltage -0.100 V is negative!", str(ctx.exception))
 
 
 if __name__ == "__main__":

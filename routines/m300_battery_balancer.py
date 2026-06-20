@@ -404,15 +404,23 @@ class BalancerApp:
         v2 = self.measure_cell_voltages(self.batch2) if self.batch2.status != "COMPLETED" else [0.0] * 8
         all_voltages = v1 + v2
 
-        # Safety Check: Individual cell overvoltage protection
+        # Safety Check: Individual cell overvoltage and reverse polarity protection
+        n1 = len(self.batch1.mux_channels)
         for idx, v in enumerate(all_voltages):
-            batch_completed = self.batch1.status == "COMPLETED" if idx < 8 else self.batch2.status == "COMPLETED"
-            if not batch_completed and v > self.max_voltage:
-                raise ValueError(
-                    f"CRITICAL SAFETY VIOLATION: Cell {idx + 1} voltage {v:.3f} V "
-                    f"exceeded maximum safety limit of {self.max_voltage:.3f} V! "
-                    f"Aborting immediately."
-                )
+            batch_completed = self.batch1.status == "COMPLETED" if idx < n1 else self.batch2.status == "COMPLETED"
+            if not batch_completed:
+                if v > self.max_voltage:
+                    raise ValueError(
+                        f"CRITICAL SAFETY VIOLATION: Cell {idx + 1} voltage {v:.3f} V "
+                        f"exceeded maximum safety limit of {self.max_voltage:.3f} V! "
+                        f"Aborting immediately."
+                    )
+                if v < 0.0:
+                    raise ValueError(
+                        f"CRITICAL SAFETY VIOLATION: Cell {idx + 1} voltage {v:.3f} V "
+                        f"is negative! This indicates a reverse polarity wiring error or a severely damaged cell. "
+                        f"Aborting immediately."
+                    )
 
         # 2. Update state and outputs
         if self.batch1.status != "COMPLETED":

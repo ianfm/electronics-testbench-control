@@ -60,6 +60,7 @@ class BalancerApp:
         mode: str = "single",
         max_voltage: float = 3.65,
         max_current: float = 3.2,
+        max_cell_current: float = 1.2,
     ) -> None:
         self.target_voltage = target_voltage
         self.balance_delta = balance_delta
@@ -69,6 +70,7 @@ class BalancerApp:
         self.mode = mode
         self.max_voltage = max_voltage
         self.max_current = max_current
+        self.max_cell_current = max_cell_current
 
         self.daq: RigolM300 | None = None
         self.psu: SiglentSPD3303X | None = None
@@ -177,6 +179,33 @@ class BalancerApp:
 
         return voltages
 
+    def calculate_cell_currents(
+        self,
+        voltages: List[float],
+        active_cells: List[int],
+        total_current: float,
+        internal_resistance: float = 0.05
+    ) -> List[float]:
+        """Calculate the shared current flowing into each active cell using a parallel impedance model."""
+        if not active_cells:
+            return [0.0] * len(voltages)
+
+        M = len(active_cells)
+        active_voltages = [voltages[cell_num - 1] for cell_num in active_cells]
+        sum_v = sum(active_voltages)
+
+        # V_common = (I_total * R + sum(V_j)) / M
+        v_common = (total_current * internal_resistance + sum_v) / M
+
+        cell_currents = [0.0] * len(voltages)
+        for cell_num in active_cells:
+            idx = cell_num - 1
+            # I_i = (V_common - V_i) / R
+            i_i = (v_common - voltages[idx]) / internal_resistance
+            cell_currents[idx] = i_i
+
+        return cell_currents
+
     def update_batch_state(self, batch: BatchState, voltages: List[float]) -> None:
         """Execute state machine step for a single batch."""
         if all(v >= self.target_voltage for v in voltages):
@@ -233,8 +262,22 @@ class BalancerApp:
             i_cell = 0.3  # Precision top-off/balancing current
 
         # Scale current based on number of active cells in parallel
-        # Max out at 3.2A (Siglent SPD3303X maximum capability per channel)
-        batch.current_set = min(3.2, len(batch.active_cells) * i_cell)
+        # Max out at self.max_current - 0.1 to avoid spurious safety trips from readback noise
+        max_setpoint = self.max_current - 0.1
+        batch.current_set = min(max_setpoint, len(batch.active_cells) * i_cell)
+
+        # Dynamic calculated cell current limiting in parallel mode:
+        if self.mode == "parallel" and len(batch.active_cells) > 1:
+            R = 0.05  # internal cell + connection resistance
+            active_voltages = [voltages[idx] for idx in active_indices]
+            sum_v = sum(active_voltages)
+            M = len(active_voltages)
+
+            # Limit total current so that the lowest cell current doesn't exceed self.max_cell_current
+            i_total_limit = M * self.max_cell_current - (sum_v - M * v_min) / R
+            i_total_limit = max(0.0, i_total_limit)
+            batch.current_set = min(batch.current_set, i_total_limit)
+
         batch.status = "CHARGING"
 
         # Apply settings to hardware or simulate
@@ -260,28 +303,23 @@ class BalancerApp:
 
     def simulate_step(self, dt: float) -> None:
         """Simulate battery cell charging physics."""
-        # Batch 1
-        if self.batch1.status == "CHARGING" and self.batch1.active_cells:
-            n_cells = len(self.batch1.active_cells)
-            i_per_cell = (self.batch1.current_reading) / n_cells
-            for cell_num in self.batch1.active_cells:
-                idx = cell_num - 1
-                # Sim charge model: voltage rises proportional to current and dt
-                # Capacity factor: cell voltage rises by 0.01V per Amp-sec / 20
-                self.sim_voltages[idx] += i_per_cell * dt * 0.005
-                # Cap voltage at the current charger set point
-                if self.sim_voltages[idx] > self.batch1.voltage_set:
-                    self.sim_voltages[idx] = self.batch1.voltage_set
+        # Calculate currents using the parallel impedance model
+        currents1 = self.calculate_cell_currents(
+            self.sim_voltages[:8], self.batch1.active_cells, self.batch1.current_reading
+        )
+        currents2 = self.calculate_cell_currents(
+            self.sim_voltages[8:], [c - 8 for c in self.batch2.active_cells], self.batch2.current_reading
+        )
 
-        # Batch 2
-        if self.batch2.status == "CHARGING" and self.batch2.active_cells:
-            n_cells = len(self.batch2.active_cells)
-            i_per_cell = (self.batch2.current_reading) / n_cells
-            for cell_num in self.batch2.active_cells:
-                idx = cell_num - 1
-                self.sim_voltages[idx] += i_per_cell * dt * 0.005
-                if self.sim_voltages[idx] > self.batch2.voltage_set:
-                    self.sim_voltages[idx] = self.batch2.voltage_set
+        for idx in range(16):
+            i_cell = (currents1[idx] if idx < 8 else currents2[idx - 8])
+            # Voltage rises proportionally to calculated cell current * dt
+            self.sim_voltages[idx] += i_cell * dt * 0.005
+            
+            # Cap voltage at the target charging voltage for the batch
+            v_set = self.batch1.voltage_set if idx < 8 else self.batch2.voltage_set
+            if self.sim_voltages[idx] > v_set:
+                self.sim_voltages[idx] = v_set
 
     def print_dashboard(self, voltages: List[float]) -> None:
         """Render a beautiful, real-time balancing dashboard in the terminal."""
@@ -323,49 +361,77 @@ class BalancerApp:
         print_batch(self.batch1, 0)
         print_batch(self.batch2, 8)
 
+    def step(self) -> bool:
+        """Executes a single monitoring, control, and safety check step.
+
+        Returns:
+            True if charging/balancing is completed for both batches, False otherwise.
+        """
+        # 1. Measure cell voltages
+        v1 = self.measure_cell_voltages(self.batch1)
+        v2 = self.measure_cell_voltages(self.batch2)
+        all_voltages = v1 + v2
+
+        # Safety Check: Individual cell overvoltage protection
+        for idx, v in enumerate(all_voltages):
+            if v > self.max_voltage:
+                raise ValueError(
+                    f"CRITICAL SAFETY VIOLATION: Cell {idx + 1} voltage {v:.3f} V "
+                    f"exceeded maximum safety limit of {self.max_voltage:.3f} V! "
+                    f"Aborting immediately."
+                )
+
+        # 2. Update state and outputs
+        self.update_batch_state(self.batch1, v1)
+        self.update_batch_state(self.batch2, v2)
+
+        # Safety Check: PSU channel total overcurrent protection (strict limit)
+        if self.batch1.current_reading > self.max_current:
+            raise ValueError(
+                f"CRITICAL SAFETY VIOLATION: PSU Channel 1 current {self.batch1.current_reading:.3f} A "
+                f"exceeded safety limit of {self.max_current:.3f} A! "
+                f"Aborting immediately."
+            )
+        if self.batch2.current_reading > self.max_current:
+            raise ValueError(
+                f"CRITICAL SAFETY VIOLATION: PSU Channel 2 current {self.batch2.current_reading:.3f} A "
+                f"exceeded safety limit of {self.max_current:.3f} A! "
+                f"Aborting immediately."
+            )
+
+        # Safety Check: Calculated individual cell overcurrent protection
+        currents1 = self.calculate_cell_currents(
+            all_voltages[:8], self.batch1.active_cells, self.batch1.current_reading
+        )
+        currents2 = self.calculate_cell_currents(
+            all_voltages[8:], [c - 8 for c in self.batch2.active_cells], self.batch2.current_reading
+        )
+        for idx in range(16):
+            i_cell = (currents1[idx] if idx < 8 else currents2[idx - 8])
+            if i_cell > self.max_cell_current:
+                raise ValueError(
+                    f"CRITICAL SAFETY VIOLATION: Calculated current for Cell {idx + 1} is {i_cell:.3f} A, "
+                    f"exceeded individual cell current safety limit of {self.max_cell_current:.3f} A! "
+                    f"Aborting immediately."
+                )
+
+        # 3. Render dashboard
+        self.print_dashboard(all_voltages)
+
+        if self.batch1.status == "COMPLETED" and self.batch2.status == "COMPLETED":
+            sys.stdout.write(f"\n{COLOR_BOLD}{COLOR_GREEN}Balancing complete! All cells charged successfully.{COLOR_RESET}\n")
+            return True
+
+        return False
+
     def run(self) -> None:
         """Main application loop."""
         self.connect()
 
         try:
             while True:
-                # 1. Measure cell voltages
-                v1 = self.measure_cell_voltages(self.batch1)
-                v2 = self.measure_cell_voltages(self.batch2)
-                all_voltages = v1 + v2
-
-                # Safety Check: Individual cell overvoltage protection
-                for idx, v in enumerate(all_voltages):
-                    if v > self.max_voltage:
-                        raise ValueError(
-                            f"CRITICAL SAFETY VIOLATION: Cell {idx + 1} voltage {v:.3f} V "
-                            f"exceeded maximum safety limit of {self.max_voltage:.3f} V! "
-                            f"Aborting immediately."
-                        )
-
-                # 2. Update state and outputs
-                self.update_batch_state(self.batch1, v1)
-                self.update_batch_state(self.batch2, v2)
-
-                # Safety Check: Overcurrent protection (with a 0.1A tolerance buffer for noise)
-                if self.batch1.current_reading > (self.max_current + 0.1):
-                    raise ValueError(
-                        f"CRITICAL SAFETY VIOLATION: PSU Channel 1 current {self.batch1.current_reading:.3f} A "
-                        f"exceeded safety limit of {self.max_current:.3f} A (+0.1A tolerance)! "
-                        f"Aborting immediately."
-                    )
-                if self.batch2.current_reading > (self.max_current + 0.1):
-                    raise ValueError(
-                        f"CRITICAL SAFETY VIOLATION: PSU Channel 2 current {self.batch2.current_reading:.3f} A "
-                        f"exceeded safety limit of {self.max_current:.3f} A (+0.1A tolerance)! "
-                        f"Aborting immediately."
-                    )
-
-                # 3. Render dashboard
-                self.print_dashboard(all_voltages)
-
-                if self.batch1.status == "COMPLETED" and self.batch2.status == "COMPLETED":
-                    sys.stdout.write(f"\n{COLOR_BOLD}{COLOR_GREEN}Balancing complete! All cells charged successfully.{COLOR_RESET}\n")
+                complete = self.step()
+                if complete:
                     break
 
                 # 4. Wait / Simulate charging
@@ -435,6 +501,12 @@ def main() -> None:
         default=3.2,
         help="Maximum safety PSU channel current limit in Amperes (default: 3.2)",
     )
+    parser.add_argument(
+        "--max-cell-current",
+        type=float,
+        default=1.2,
+        help="Maximum safety individual cell current limit in Amperes (default: 1.2)",
+    )
 
     args = parser.parse_args()
 
@@ -447,6 +519,7 @@ def main() -> None:
         mode=args.mode,
         max_voltage=args.max_voltage,
         max_current=args.max_current,
+        max_cell_current=args.max_cell_current,
     )
     app.run()
 

@@ -168,3 +168,53 @@ manual and hardware validation described in `AGENTS.md`.
 The cache is an optimization, not an authority. Cached resources are probed and
 must answer again. DHCP changes, disconnected devices, and stale entries are
 therefore visible as failed attempts rather than accepted identities.
+
+## Diagnostics and Troubleshooting Tools
+
+This project provides built-in tools to verify instrument health and resolve common connection errors.
+
+### Verification CLI (`testbench verify`)
+
+The `verify` command runs auto-discovery, connects to each detected instrument, and executes a safe, read-only self-test (e.g., measuring voltage on DMMs, reading back channel setpoints on PSUs, or querying slot configuration on the M300).
+
+```bash
+testbench verify
+```
+
+If any instrument fails to answer or throws an error (e.g., a USB pipe error), it is highlighted in the diagnostics table as `FAIL` with its specific error description:
+
+```text
+================================================================================
+Instrument           | Status   | Resource                       | Self-Test Reading
+--------------------------------------------------------------------------------
+rigol-m300           | PASS     | TCPIP::192.168.86.170::INSTR   | Ch 201: 36.492 mV
+rigol-dm3058e        | FAIL     | USB0::6833::2500::DM3R232201   | Failed in discovery: ValueError: [Errno 32] Pipe error...
+================================================================================
+```
+
+### Resolving USB TMC Lockups (`testbench reset-usb`)
+
+USB Test and Measurement Class (USBTMC) devices (like the Rigol DM3058E or Keithley 2110) are prone to hanging if a session is terminated abruptly. This results in a persistent `ValueError: [Errno 32] Pipe error` that often survives physical cable replugging because the lock is maintained by the host-side `libusb` session.
+
+To resolve this programmatically without restarting the computer or rebooting the USB subsystem, run:
+
+```bash
+testbench reset-usb
+```
+
+This scans the USB bus for supported testbench vendor IDs (Rigol, Keithley, and Keysight) and issues a hardware-level USB bus reset via PyUSB. You can also run it automatically before verifying:
+
+```bash
+testbench verify --reset-usb
+```
+
+### Configurable Test Targets (Developers)
+
+Developers running the hardware validation test suite under `tests/hardware/` can bypass the auto-discovery scan and target specific connection strings by setting environment variables:
+
+```bash
+TEST_HW_RESOURCE_SPD3303X="TCPIP::192.168.86.169::5025::SOCKET" \
+.venv/bin/python -m unittest discover -v -s tests/hardware
+```
+
+This is especially useful for accelerating test execution or forcing checks against known physical endpoints.

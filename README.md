@@ -17,11 +17,21 @@ SCPI-based drivers and helper scripts for common lab instruments (e.g., Rigol DM
    pip install -e .
    ```
 
-3) **Verify discovery**
-   ```bash
-   testbench discover
-   # combines VISA enumeration with bounded LAN fallbacks and *IDN? checks
-   ```
+3) **Verify setup and diagnostics**
+   - Run verification self-tests on all connected instruments:
+     ```bash
+     testbench verify
+     ```
+   - If a USB instrument hangs or fails with a pipe error, clear its connection:
+     ```bash
+     testbench reset-usb
+     # Or run verification with a pre-reset:
+     testbench verify --reset-usb
+     ```
+   - Top-level discovery can also be run directly:
+     ```bash
+     testbench discover
+     ```
 
 4) **Try a command**
    - Measure current with the DMM (defaults to Keithley 2110 adapter; swap imports in the script if needed):

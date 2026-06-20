@@ -88,13 +88,42 @@ def bind_driver(
     device: DiscoveredDevice,
     settings: Optional[SCPISettings] = None,
 ):
-    """Construct the matching driver using a verified discovered resource."""
+    """Construct the matching driver using a verified discovered resource.
+
+    Tries endpoints in order of transport priority (USB, VXI-11, SOCKET) and falls
+    back to secondary endpoints if the preferred connection attempt fails.
+    """
     registration = registration_for_name(driver_name)
     if not registration.matches(device.identity):
         raise ValueError(
             f"{device.identity.raw!r} does not match registered driver {driver_name!r}"
         )
-    kwargs = {"resource_name": device.preferred_resource}
-    if settings is not None:
-        kwargs["settings"] = settings
-    return registration.driver_class(**kwargs)
+
+    def priority(resource: str) -> tuple[int, str]:
+        if resource.startswith("USB") and resource.endswith("::INSTR"):
+            return 0, resource
+        if resource.startswith("TCPIP") and resource.endswith("::INSTR"):
+            return 1, resource
+        if resource.startswith("TCPIP") and resource.endswith("::SOCKET"):
+            return 2, resource
+        return 3, resource
+
+    sorted_resources = sorted(device.resources, key=priority)
+
+    last_error = None
+    for resource in sorted_resources:
+        kwargs = {"resource_name": resource}
+        if settings is not None:
+            kwargs["settings"] = settings
+        try:
+            driver_instance = registration.driver_class(**kwargs)
+            if driver_instance.online():
+                return driver_instance
+        except Exception as e:
+            last_error = e
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError(
+        f"Failed to connect to any discovered resource for {driver_name}: {device.resources}"
+    )

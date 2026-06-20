@@ -26,3 +26,17 @@ class SiglentSPD3303X(ScpiPSU):
 
     def turn_off_display(self, channel: int = 1) -> None:
         self.driver.write(f"OUTP:WAVE CH{channel},OFF")
+
+    def get_voltage(self, channel: int = 1) -> float | None:
+        """Query the actual measured output voltage of the channel."""
+        try:
+            return float(self.driver.query(f"MEASure:VOLTage? CH{channel}", cast=float))
+        except Exception:
+            return None
+
+    def get_current(self, channel: int = 1) -> float | None:
+        """Query the actual measured output current of the channel."""
+        try:
+            return float(self.driver.query(f"MEASure:CURRent? CH{channel}", cast=float))
+        except Exception:
+            return None

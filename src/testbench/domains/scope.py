@@ -24,9 +24,17 @@ class Oscilloscope(ABC):
 class ScpiScope(Oscilloscope):
     ID_SUBSTRINGS: tuple[str, ...] = ()
 
-    def __init__(self, settings: SCPISettings = SCPISettings()) -> None:
+    def __init__(
+        self,
+        settings: SCPISettings = SCPISettings(),
+        resource_name: str | None = None,
+    ) -> None:
         driver = SCPIDriver(settings)
-        self.instrument_name = driver.connect_first(self.ID_SUBSTRINGS)
+        self.instrument_name = (
+            driver.connect_resource(resource_name)
+            if resource_name
+            else driver.connect_first(self.ID_SUBSTRINGS)
+        )
         super().__init__(driver)
 
     def identify(self) -> str:

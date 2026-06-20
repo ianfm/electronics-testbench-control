@@ -49,9 +49,17 @@ class ScpiPSU(PowerSupply):
 
     ID_SUBSTRINGS: Tuple[str, ...] = ()
 
-    def __init__(self, settings: SCPISettings = SCPISettings()) -> None:
+    def __init__(
+        self,
+        settings: SCPISettings = SCPISettings(),
+        resource_name: str | None = None,
+    ) -> None:
         driver = SCPIDriver(settings)
-        name = driver.connect_first(self.ID_SUBSTRINGS)
+        name = (
+            driver.connect_resource(resource_name)
+            if resource_name
+            else driver.connect_first(self.ID_SUBSTRINGS)
+        )
         self.instrument_name = name
         super().__init__(driver)
 

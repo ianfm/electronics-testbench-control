@@ -7,6 +7,7 @@ from typing import Optional
 
 from testbench.core.scpi import SCPISettings
 from testbench.discovery import DeviceIdentity, DiscoveredDevice, DiscoveryReport
+from testbench.daq.rigol_m300 import RigolM300
 from testbench.dmm.keithley_2110 import Keithley2110
 from testbench.dmm.rigol_dm3058e import RigolDM3058E
 from testbench.psu.siglent_spd1305x import SiglentSPD1305X
@@ -31,6 +32,7 @@ class DriverRegistration:
 
 
 DRIVER_REGISTRATIONS = (
+    DriverRegistration("rigol-m300", "daq", RigolM300, ("rigol",), ("M300",)),
     DriverRegistration(
         "rigol-dm3058e", "dmm", RigolDM3058E, ("rigol",), ("DM3058E",)
     ),

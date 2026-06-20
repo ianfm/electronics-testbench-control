@@ -18,6 +18,9 @@ dependencies = [
   "pyusb"
 ]
 
+[project.optional-dependencies]
+analysis = ["matplotlib"]
+
 [project.scripts]
 testbench = "testbench.cli.main:main"
 

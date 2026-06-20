@@ -6,6 +6,7 @@ from pathlib import Path
 
 from testbench.binding import bind_driver, matching_device
 from testbench.discovery import DiscoveryConfig, discover_instruments
+from testbench.daq.rigol_m300 import RigolM300
 from testbench.dmm.keithley_2110 import Keithley2110
 from testbench.dmm.rigol_dm3058e import RigolDM3058E
 from testbench.psu.siglent_spd1305x import SiglentSPD1305X
@@ -20,6 +21,10 @@ DMM_MODELS = {
 PSU_MODELS = {
     "siglent-spd1305x": SiglentSPD1305X,
     "siglent-spd3303x": SiglentSPD3303X,
+}
+
+DAQ_MODELS = {
+    "rigol-m300": RigolM300,
 }
 
 
@@ -129,6 +134,12 @@ def make_parser() -> argparse.ArgumentParser:
     psu.add_argument("--power", choices=["on", "off"])
     _add_resource_arguments(psu)
 
+    daq = sub.add_parser("daq", help="Data acquisition and switch actions")
+    daq.add_argument("--model", choices=DAQ_MODELS.keys(), required=True)
+    daq.add_argument("--list-modules", action="store_true")
+    daq.add_argument("--measure-voltage", type=int, metavar="CHANNEL")
+    _add_resource_arguments(daq)
+
     discover = sub.add_parser(
         "discover", help="Identify instruments using VISA and LAN fallbacks"
     )
@@ -174,6 +185,25 @@ def main(argv: list[str] | None = None) -> int:
             psu.output_on(ch)
         elif args.power == "off":
             psu.output_off(ch)
+        return 0
+
+    if args.domain == "daq":
+        cls = DAQ_MODELS[args.model]
+        daq = _connect_model(cls, args.model, args)
+        if not daq.online():
+            print("DAQ not found")
+            return 1
+        if args.list_modules:
+            for slot, module in daq.module_inventory().items():
+                print(
+                    f"{slot}: {module.manufacturer}, {module.model}, "
+                    f"{module.serial}, {module.firmware}"
+                )
+        if args.measure_voltage is not None:
+            reading = daq.measure_voltage_dc(args.measure_voltage)
+            print(f"{reading} V")
+        if not args.list_modules and args.measure_voltage is None:
+            print("No DAQ action requested")
         return 0
 
     return 1

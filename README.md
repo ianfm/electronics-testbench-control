@@ -32,6 +32,11 @@ SCPI-based drivers and helper scripts for common lab instruments (e.g., Rigol DM
      ```bash
      python3 examples/spd1305-module-test.py
      ```
+   - Inspect M300 modules or measure one configured multiplexer channel:
+     ```bash
+     testbench daq --model rigol-m300 --list-modules
+     testbench daq --model rigol-m300 --measure-voltage 201
+     ```
 
 ## Notes
 - The `install/99-visa.rules` udev rule plus `plugdev` group membership are required for non-root USB access; `install/setup_system.sh` applies them.
@@ -43,4 +48,6 @@ SCPI-based drivers and helper scripts for common lab instruments (e.g., Rigol DM
   in [`docs/instrument-documentation.md`](docs/instrument-documentation.md).
 - Drivers can retain their independent lookup or accept a verified resource
   selected by the top-level discovery and binding registry.
+- The M300 DAQ driver is manual-backed and clears its scan list after a
+  single-channel measurement so the scanned multiplexer relay is left open.
 - These instructions are tested on Ubuntu 22.04.

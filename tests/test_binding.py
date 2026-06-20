@@ -82,6 +82,20 @@ class TopLevelBindingTests(unittest.TestCase):
 
         self.assertEqual(instrument.instrument_name, "TCPIP::192.0.2.10::INSTR")
 
+    def test_b2902b_binding_initializes_subsystems_and_compatibility_api(self) -> None:
+        device = DiscoveredDevice(
+            DeviceIdentity.parse("Keysight Technologies,B2902B,SERIAL,1.0"),
+            resources=["USB0::10893::37377::SERIAL::0::INSTR"],
+        )
+        with patch("testbench.domains.sourcemeter.SCPIDriver", FakeSCPIDriver):
+            instrument = bind_driver("keysight-b2902b", device)
+
+        self.assertTrue(instrument.online())
+        self.assertTrue(hasattr(instrument, "source"))
+        self.assertTrue(hasattr(instrument, "sense"))
+        self.assertTrue(callable(instrument.set_voltage_source))
+        self.assertEqual(instrument.driver.writes[:2], ["SYST:REM", "*RST"])
+
 
 if __name__ == "__main__":
     unittest.main()

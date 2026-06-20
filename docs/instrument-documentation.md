@@ -10,9 +10,7 @@ for changing device interaction.
 ### Rigol DM3058E
 
 - Reference: `DM3058 Programming Guide`
-- Existing repository copy: `doc/DM3058_ProgrammingGuide_EN.pdf` on
-  `origin/rigol_m300`
-- Current-branch status: not present
+- Repository copy: `doc/DM3058_ProgrammingGuide_EN.pdf`
 - Verified use: `MEASure:VOLTage:DC?` accepted by serial `DM3R232201369` on
   2026-06-19
 
@@ -29,16 +27,17 @@ for changing device interaction.
 ### Rigol M300
 
 - Reference: `M300 Programming Guide`
-- Existing repository copy: `doc/M300_ProgrammingGuide_EN.pdf` on
-  `origin/rigol_m300`
+- Repository copy: `doc/M300_ProgrammingGuide_EN.pdf`
 - Official product documentation:
   <https://www.rigolna.com/products/data-acquisition/m300-system/>
-- Current-branch status: not present
+- Driver: `src/testbench/daq/rigol_m300.py`
 - Verified configuration: MC3065 DMM in slot 1, MC3132 multiplexers in slots 2
   and 4, and MC3416 actuator modules in slots 3 and 5
 - Verified use: `SYSTem:CTYPe?`, `INSTrument:DMM?`,
   `CONFigure:VOLTage:DC`, `ROUTe:SCAN`, `READ?`, and `ROUTe:OPEN?` accepted by
   serial `MM3A203500090`, firmware `00.02.00.08.00`, on 2026-06-19
+- The root `rigol_m300.py` file is a repaired but still hardware-unvalidated
+  legacy ring-out workflow. It is not the package M300 driver.
 
 ### Siglent SPD3303X-E
 
@@ -61,12 +60,11 @@ for changing device interaction.
 ### Keysight B2902B
 
 - Reference: `B2900A Precision Source-Measure Unit SCPI Command Reference`
-- Existing repository copy:
-  `manuals/B2900A Precision Source-Measure Unit SCPI Command Reference.pdf` on
-  `origin/b2902b-subsystem`
-- Current-branch status: not present
-- Required follow-up: preserve the exact publication revision when bringing the
-  B2902B subsystem branch forward
+- Repository copy:
+  `manuals/B2900A Precision Source-Measure Unit SCPI Command Reference.pdf`
+- Driver: `src/testbench/sourcemeter/keysight_b2902b.py`
+- Required follow-up: record the exact publication revision from the manual
+  title page
 
 ## Maintenance rules
 

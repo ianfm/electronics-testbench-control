@@ -18,12 +18,16 @@ class SiglentSPD3303XHardwareTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        report = discover_instruments()
-        device = matching_device("siglent-spd3303x", report)
-        if device is None:
-            raise unittest.SkipTest("Siglent SPD3303X hardware not found on bench; skipping.")
-
-        cls.psu = bind_driver("siglent-spd3303x", device)
+        import os
+        resource = os.environ.get("TEST_HW_RESOURCE_SPD3303X")
+        if resource:
+            cls.psu = SiglentSPD3303X(resource_name=resource)
+        else:
+            report = discover_instruments()
+            device = matching_device("siglent-spd3303x", report)
+            if device is None:
+                raise unittest.SkipTest("Siglent SPD3303X hardware not found on bench; skipping.")
+            cls.psu = bind_driver("siglent-spd3303x", device)
 
     @classmethod
     def tearDownClass(cls) -> None:

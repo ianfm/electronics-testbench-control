@@ -17,13 +17,17 @@ class Keithley2110HardwareTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        # Run discovery to locate the device
-        report = discover_instruments()
-        device = matching_device("keithley-2110", report)
-        if device is None:
-            raise unittest.SkipTest("Keithley 2110 hardware not found on bench; skipping.")
-
-        cls.dmm = bind_driver("keithley-2110", device)
+        import os
+        resource = os.environ.get("TEST_HW_RESOURCE_KEITHLEY2110")
+        if resource:
+            cls.dmm = Keithley2110(resource_name=resource)
+        else:
+            # Run discovery to locate the device
+            report = discover_instruments()
+            device = matching_device("keithley-2110", report)
+            if device is None:
+                raise unittest.SkipTest("Keithley 2110 hardware not found on bench; skipping.")
+            cls.dmm = bind_driver("keithley-2110", device)
 
     @classmethod
     def tearDownClass(cls) -> None:

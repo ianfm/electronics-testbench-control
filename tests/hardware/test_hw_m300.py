@@ -17,12 +17,16 @@ class RigolM300HardwareTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        report = discover_instruments()
-        device = matching_device("rigol-m300", report)
-        if device is None:
-            raise unittest.SkipTest("Rigol M300 hardware not found on bench; skipping.")
-
-        cls.daq = bind_driver("rigol-m300", device)
+        import os
+        resource = os.environ.get("TEST_HW_RESOURCE_M300")
+        if resource:
+            cls.daq = RigolM300(resource_name=resource)
+        else:
+            report = discover_instruments()
+            device = matching_device("rigol-m300", report)
+            if device is None:
+                raise unittest.SkipTest("Rigol M300 hardware not found on bench; skipping.")
+            cls.daq = bind_driver("rigol-m300", device)
 
     @classmethod
     def tearDownClass(cls) -> None:

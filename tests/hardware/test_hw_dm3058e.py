@@ -16,12 +16,16 @@ class RigolDM3058EHardwareTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        report = discover_instruments()
-        device = matching_device("rigol-dm3058e", report)
-        if device is None:
-            raise unittest.SkipTest("Rigol DM3058E hardware not found on bench; skipping.")
-
-        cls.dmm = bind_driver("rigol-dm3058e", device)
+        import os
+        resource = os.environ.get("TEST_HW_RESOURCE_DM3058E")
+        if resource:
+            cls.dmm = RigolDM3058E(resource_name=resource)
+        else:
+            report = discover_instruments()
+            device = matching_device("rigol-dm3058e", report)
+            if device is None:
+                raise unittest.SkipTest("Rigol DM3058E hardware not found on bench; skipping.")
+            cls.dmm = bind_driver("rigol-dm3058e", device)
 
     @classmethod
     def tearDownClass(cls) -> None:

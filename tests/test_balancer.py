@@ -213,6 +213,27 @@ class BalancerAppTests(unittest.TestCase):
                 # Dashboard should show preserved 3.59V for batch 1, and new 3.21V for batch 2
                 mock_print.assert_called_once_with([3.59]*8 + [3.21]*8)
 
+    def test_monitor_mode(self) -> None:
+        app = BalancerApp(simulated=True, monitor=True)
+        # Verify that in monitor mode:
+        # 1. step() returns False (always continues monitoring)
+        # 2. measure_cell_voltages is called with open_circuit=False
+        with patch.object(app, 'measure_cell_voltages', return_value=[3.20] * 8) as mock_measure:
+            with patch.object(app, 'print_dashboard') as mock_print:
+                completed = app.step()
+                self.assertFalse(completed)
+                mock_measure.assert_has_calls([
+                    call(app.batch1, open_circuit=False),
+                    call(app.batch2, open_circuit=False)
+                ])
+                mock_print.assert_called_once_with([3.20]*16)
+        
+        # Verify batch parameters remain in MONITORING / OFF state
+        self.assertEqual(app.batch1.status, "MONITORING")
+        self.assertEqual(app.batch1.charge_mode, "OFF")
+        self.assertEqual(app.batch1.active_cells, [])
+        self.assertEqual(app.batch1.current_reading, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

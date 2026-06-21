@@ -66,6 +66,7 @@ class BalancerApp:
         max_cell_current: float = 1.2,
         batches: str = "both",
         ocv_interval: float = 60.0,
+        monitor: bool = False,
     ) -> None:
         self.target_voltage = target_voltage
         self.balance_delta = balance_delta
@@ -78,6 +79,7 @@ class BalancerApp:
         self.max_cell_current = max_cell_current
         self.batches = batches
         self.ocv_interval = ocv_interval
+        self.monitor = monitor
         self.last_ocv_time = 0.0
         self.trigger_ocv_next = True  # Start with an OCV measurement
         self.psu_overcurrent_cycles = {1: 0, 2: 0}
@@ -149,15 +151,29 @@ class BalancerApp:
             # Bind SPD3303X
             psu_device = matching_device("siglent-spd3303x", report)
             if not psu_device:
-                raise RuntimeError("Siglent SPD3303X PSU not found on the bench.")
-            self.psu = bind_driver("siglent-spd3303x", psu_device)
+                if self.monitor:
+                    print("Siglent SPD3303X PSU not found; continuing in monitor-only mode with DAQ only.")
+                    self.psu = None
+                else:
+                    raise RuntimeError("Siglent SPD3303X PSU not found on the bench.")
+            else:
+                self.psu = bind_driver("siglent-spd3303x", psu_device)
 
             print(f"Connected to DAQ: {self.daq.identify().strip()}")
-            print(f"Connected to PSU: {self.psu.identify().strip()}")
+            if self.psu:
+                print(f"Connected to PSU: {self.psu.identify().strip()}")
 
             # Make sure DMM is enabled
             if not self.daq.dmm_installed() or not self.daq.dmm_enabled():
                 raise RuntimeError("M300 DMM card is not installed or enabled.")
+
+            # In monitor-only mode, ensure PSU outputs are off and relays are open initially
+            if self.monitor:
+                if self.psu:
+                    self.psu.output_off(1)
+                    self.psu.output_off(2)
+                self.daq.open_channels(range(301, 317))
+                self.daq.clear_scan()
 
         except Exception as e:
             print(f"{COLOR_RED}Error connecting to hardware: {e}{COLOR_RESET}")
@@ -424,6 +440,41 @@ class BalancerApp:
         Returns:
             True if charging/balancing is completed for both batches, False otherwise.
         """
+        if self.monitor:
+            # Monitor-only mode: measure voltages directly without switching relays or PSU
+            v1 = self.measure_cell_voltages(self.batch1, open_circuit=False) if self.batch1.status != "COMPLETED" else [0.0] * 8
+            v2 = self.measure_cell_voltages(self.batch2, open_circuit=False) if self.batch2.status != "COMPLETED" else [0.0] * 8
+            all_voltages = v1 + v2
+            
+            # Keep batches in monitoring/off state
+            for batch in (self.batch1, self.batch2):
+                if batch.status != "COMPLETED":
+                    batch.status = "MONITORING"
+                    batch.charge_mode = "OFF"
+                    batch.active_cells = []
+                    batch.current_reading = 0.0
+
+            # Perform safety checks
+            n1 = len(self.batch1.mux_channels)
+            for idx, v in enumerate(all_voltages):
+                batch_completed = self.batch1.status == "COMPLETED" if idx < n1 else self.batch2.status == "COMPLETED"
+                if not batch_completed:
+                    if v > self.max_voltage:
+                        raise ValueError(
+                            f"CRITICAL SAFETY VIOLATION: Cell {idx + 1} voltage {v:.3f} V "
+                            f"exceeded maximum safety limit of {self.max_voltage:.3f} V! "
+                            f"Aborting immediately."
+                        )
+                    if v < 0.0:
+                        raise ValueError(
+                            f"CRITICAL SAFETY VIOLATION: Cell {idx + 1} voltage {v:.3f} V "
+                            f"is negative! Aborting immediately."
+                        )
+
+            # Print dashboard and return False
+            self.print_dashboard(all_voltages)
+            return False
+
         current_time = time.time()
         need_ocv = (
             self.trigger_ocv_next or
@@ -674,6 +725,11 @@ def main() -> None:
         default=60.0,
         help="Interval in seconds between open-circuit voltage (OCV) measurements (default: 60.0)",
     )
+    parser.add_argument(
+        "--monitor",
+        action="store_true",
+        help="Run in monitor-only mode (read and display voltages periodically, PSU outputs remain OFF, actuator relays remain OPEN)",
+    )
 
     args = parser.parse_args()
 
@@ -689,6 +745,7 @@ def main() -> None:
         max_cell_current=args.max_cell_current,
         batches=args.batches,
         ocv_interval=args.ocv_interval,
+        monitor=args.monitor,
     )
     app.run()
 

@@ -8,6 +8,8 @@ from typing import Sequence
 from testbench.core.scpi import SCPISettings
 from testbench.sourcemeter.keysight_b2902b import KeysightB2902B
 
+DEFAULT_RESOURCE = "USB0::10893::37377::MY60440156::0::INSTR"
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -16,7 +18,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--channel", type=int, default=1, help="SMU channel (1 or 2)")
     parser.add_argument(
         "--resource",
-        help="Explicit VISA resource string (e.g. TCPIP::192.168.10.2::INSTR)",
+        default=DEFAULT_RESOURCE,
+        help=f"VISA resource string for the SMU (default: {DEFAULT_RESOURCE})",
     )
     parser.add_argument("--volts", type=float, required=True, help="Voltage setpoint")
     parser.add_argument(
@@ -144,4 +147,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

@@ -8,6 +8,8 @@ import time
 from testbench.core.scpi import SCPISettings
 from testbench.sourcemeter.keysight_b2902b import KeysightB2902B
 
+DEFAULT_RESOURCE = "USB0::10893::37377::MY60440156::0::INSTR"
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -15,8 +17,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--resource",
-        default="USB0::10893::37377::MY60440156::0::INSTR",
-        help="VISA resource name for the instrument",
+        default=DEFAULT_RESOURCE,
+        help=f"VISA resource name for the instrument (default: {DEFAULT_RESOURCE})",
     )
     parser.add_argument(
         "--points",

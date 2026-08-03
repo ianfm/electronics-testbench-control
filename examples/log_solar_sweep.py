@@ -11,6 +11,8 @@ from typing import Any, TextIO
 from testbench.core.scpi import SCPIDriver, SCPISettings
 from testbench.sourcemeter.keysight_b2902b import KeysightB2902B
 
+DEFAULT_RESOURCE = "USB0::10893::37377::MY60440156::0::INSTR"
+
 DEFAULT_POINTS = 86
 DEFAULT_START_VOLTS = 0.0
 DEFAULT_STOP_VOLTS = 8.5
@@ -31,7 +33,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--resource",
-        help="Explicit VISA resource string (e.g. TCPIP::192.168.10.2::INSTR)",
+        default=DEFAULT_RESOURCE,
+        help=f"VISA resource string for the SMU (default: {DEFAULT_RESOURCE})",
     )
     parser.add_argument(
         "--channel",

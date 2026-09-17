@@ -1,0 +1,209 @@
+<title>ON1006 Charger Comparison</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{color-scheme:light;--plane:#f6f6f2;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--ring:rgba(11,11,11,.10);--a:#2a78d6;--b:#eb6834;--a-wash:rgba(42,120,214,.10);--b-wash:rgba(235,104,52,.10)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--plane:#0e0e0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);--a:#3987e5;--b:#d95926;--a-wash:rgba(57,135,229,.14);--b-wash:rgba(217,89,38,.14)}}
+:root[data-theme="dark"]{color-scheme:dark;--plane:#0e0e0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);--a:#3987e5;--b:#d95926;--a-wash:rgba(57,135,229,.14);--b-wash:rgba(217,89,38,.14)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--plane);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;padding-block:32px 56px;padding-inline:20px}
+main{max-width:980px;margin:0 auto;display:grid;gap:26px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+h1{font-size:28px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px;text-wrap:balance}
+header p{margin:0;color:var(--ink-2);max-width:70ch}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:16px 18px}
+.card h2{font-size:15px;font-weight:600;margin:0 0 2px}
+.card .sub{font-size:12.5px;color:var(--ink-2);margin:0 0 8px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);margin:0 0 6px}
+.legend span::before{content:"";display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:6px;border-radius:1px;background:var(--k)}
+svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y;cursor:crosshair}
+.readout{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline;min-height:22px;margin:6px 0 0;font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.readout .t{font-family:"IBM Plex Mono",ui-monospace,monospace;color:var(--muted)}
+.readout .v{font-family:"IBM Plex Mono",ui-monospace,monospace;color:var(--ink);font-weight:500}
+.readout span.k::before{content:"";display:inline-block;width:12px;height:2px;vertical-align:middle;margin-right:6px;background:var(--kc)}
+.readout .hint{color:var(--muted);font-style:italic}
+.readout.pinned .t::after{content:" · pinned (tap to release)";color:var(--muted)}
+.gridline{stroke:var(--grid);stroke-width:1}.axisline{stroke:var(--axis);stroke-width:1}
+.tick{fill:var(--muted);font-size:11px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.series{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.endlabel{font-size:11.5px;fill:var(--ink-2);font-family:"IBM Plex Mono",ui-monospace,monospace}
+.enddot{stroke:var(--surface);stroke-width:2}
+.xh{stroke:var(--axis);stroke-width:1;display:none}
+.wrap{position:relative}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--ring);border-radius:6px;padding:8px 10px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.08);display:none;min-width:170px}
+.tip .t{color:var(--muted);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;margin-bottom:4px}
+.tip .row{display:flex;justify-content:space-between;gap:12px}.tip .row b{font-weight:600;font-variant-numeric:tabular-nums}
+.tip .row span{color:var(--ink-2)}.tip .row span::before{content:"";display:inline-block;width:10px;height:2px;vertical-align:middle;margin-right:6px;background:var(--k)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left;color:var(--ink-2);font-weight:500}
+thead th{color:var(--ink-2);font-weight:500}
+thead th .sw{display:inline-block;width:12px;height:2px;vertical-align:middle;margin-right:6px;background:var(--k)}
+.notes{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.notes h3{font-size:14px;font-weight:600;margin:0 0 8px}.notes ul{margin:0;padding-left:18px;display:grid;gap:5px}.notes li{font-size:14px;color:var(--ink-2)}
+.tablewrap{overflow-x:auto}
+footer{color:var(--muted);font-size:12.5px}
+</style>
+<main>
+  <header>
+    <p class="eyebrow">Bench comparison · ON1006 · 2026-09-15 to 2026-09-17</p>
+    <h1>LTC3130 vs LT3652 Charger</h1>
+    <p>Two ON1006 boards, identical fixture and pack: the LTC3130 revision and the original LT3652 revision, each charging the same protection-latched LiFePO4 pack from 0 V terminals to termination against the same measured panel curve (Voc 7.71 V, Isc 0.194 A, Pmax 1.10 W).</p>
+  </header>
+
+  <section class="card"><h2>Summary</h2><div class="tablewrap"><table id="summary"></table></div></section>
+
+  <section class="card wrap"><h2>Pack voltage</h2><p class="sub">At the pack terminals (34461A). Time from the moment the battery loop closed.</p>
+    <div class="legend" id="lg1"></div><div id="c-vbat"></div></section>
+  <section class="card wrap"><h2>Charge current</h2><p class="sub">In the battery lead (B2902B CH2, zero-burden).</p><div id="c-ichg"></div></section>
+  <section class="card wrap"><h2>Power drawn from the emulated panel</h2><p class="sub">Both chargers held the panel at ~6.1 V; the input limit is the panel's, not the charger's.</p><div id="c-pin"></div></section>
+  <section class="card wrap"><h2>Cumulative charge delivered</h2><p class="sub" id="soc-sub"></p><div id="c-soc"></div></section>
+  <section class="card wrap"><h2>Charging efficiency</h2><p class="sub">Power into the pack ÷ power from the panel, per sample. Replay-hunt artifacts visible in the late phase of each run.</p><div id="c-eff"></div></section>
+
+  <section class="notes">
+    <div class="card"><h3>What is comparable</h3><ul id="n-same"></ul></div>
+    <div class="card"><h3>What is not</h3><ul id="n-diff"></ul></div>
+  </section>
+  <footer id="foot"></footer>
+</main>
+<div class="tip" id="tip"></div>
+<script id="data-a" type="application/json">__DATA_A__</script>
+<script id="data-b" type="application/json">__DATA_B__</script>
+<script>
+(function(){
+const A = JSON.parse(document.getElementById('data-a').textContent), B = JSON.parse(document.getElementById('data-b').textContent);
+const runs = [{k:'a', name:'LTC3130 (rev 1.2.x)', d:A, color:'var(--a)'}, {k:'b', name:'LT3652 (original)', d:B, color:'var(--b)'}];
+const fmt=(x,d=2)=>(x==null||Number.isNaN(x))?'—':Number(x).toFixed(d);
+const pct=x=>(x==null||Number.isNaN(x))?'—':(x*100).toFixed(1)+' %';
+const hms=s=>{const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h+'h '+String(m).padStart(2,'0')+'m'};
+for(const r of runs){ for(const p of r.d.series){ p.eff=(p.p_in>0.01&&p.v_bat>0)?(p.v_bat*p.i_chg)/p.p_in*100:null; } }
+
+// Cumulative charge: coulomb count of the logged charge current, in mAh. The
+// LTC3130 run has ~130 mAh charged during an unlogged stretch (18:38-19:05);
+// it is added as a ramp across that gap so the curve is honest. The pack's
+// measured 3200 mAh discharge is drawn as a reference line only.
+const REF_MAH = 3200;
+const GAP = {k:'a', t0: 17182, t1: 19292, ah: 0.13};
+for(const r of runs){ for(const p of r.d.series){
+  let ah = p.ah;
+  if(r.k===GAP.k){ if(p.t>=GAP.t1) ah+=GAP.ah; else if(p.t>GAP.t0) ah+=GAP.ah*(p.t-GAP.t0)/(GAP.t1-GAP.t0); }
+  p.mah = ah*1e3;
+} }
+document.getElementById('soc-sub').textContent = `Coulomb count of the logged charge current. The LTC3130 curve includes ~${GAP.ah*1e3} mAh charged during its unlogged 18:38–19:05 stretch. The dashed reference is the ${REF_MAH} mAh the pack returned in the earlier discharge test, drawn for scale only.`;
+document.getElementById('lg1').innerHTML = runs.map(r=>`<span style="--k:${r.color}">${r.name}</span>`).join('');
+
+// summary table
+const rowsDef = [
+  ['Cycle time to termination', r=>hms(r.summary.duration_s)],
+  ['Charge delivered (logged)', r=>fmt(r.summary.ah_in,2)+' Ah'],
+  ['Energy into pack', r=>fmt(r.summary.wh_bat,2)+' Wh'],
+  ['Energy from panel', r=>fmt(r.summary.wh_in,2)+' Wh'],
+  ['Efficiency, overall', r=>pct(r.summary.eff_overall)],
+  ['Efficiency, excl. replay-hunt rows', r=>pct(r.summary.eff_excluding_hunt)],
+  ['Efficiency, constant-current phase', r=>pct(r.summary.eff_cc)],
+  ['Constant-current plateau', r=>fmt(r.summary.i_plateau_a*1e3,0)+' mA for '+hms(r.summary.cc_end_s)],
+  ['Input operating point (CC)', r=>fmt(r.summary.v1_cc,2)+' V / '+fmt(r.summary.i1_cc*1e3,0)+' mA'],
+  ['Harvest of panel Pmax (CC)', r=>pct(r.summary.harvest_fraction)],
+  ['Pack voltage at loop close → peak', r=>fmt(r.summary.v_bat_start,3)+' → '+fmt(r.summary.v_bat_max,3)+' V'],
+  ['Final current at termination', r=>fmt(r.summary.i_final_a*1e3,1)+' mA'],
+  ['Replay-hunt time (flagged)', r=>r.summary.hunt_hours!=null? fmt(r.summary.hunt_hours,1)+' h':'—'],
+  ['Charge delivered by 10 h (incl. gap estimate)', r=>{const s=r.series; let lo=0,hi=s.length-1; while(lo<hi){const m=(lo+hi)>>1; if(s[m].t<36000) lo=m+1; else hi=m;} return s[lo].t<36000-600?'—':fmt(s[lo].mah,0)+' mAh';}],
+  ['Charge delivered at termination (incl. gap estimate)', r=>fmt(r.series[r.series.length-1].mah,0)+' mAh'],
+];
+document.getElementById('summary').innerHTML = '<thead><tr><th></th>'+runs.map(r=>`<th><span class="sw" style="--k:${r.color}"></span>${r.name}</th>`).join('')+'</tr></thead><tbody>'+
+  rowsDef.map(([l,f])=>`<tr><td>${l}</td>${runs.map(r=>`<td>${f(r.d)}</td>`).join('')}</tr>`).join('')+'</tbody>';
+
+// charts
+const W=940,H=230,ML=52,MR=70,MT=14,MB=30;
+const tmax = Math.max(...runs.map(r=>r.d.series[r.d.series.length-1].t));
+const x=t=>ML+(t/tmax)*(W-ML-MR);
+function ticks(lo,hi,n){const span=hi-lo||1,raw=span/n,p=Math.pow(10,Math.floor(Math.log10(raw)));let st=p;for(const s of [1,2,2.5,5,10]){if(raw/p<=s){st=s*p;break}}const out=[];for(let v=Math.ceil(lo/st)*st;v<=hi+1e-9;v+=st)out.push(+v.toFixed(6));return out}
+function timeTicks(){const step=tmax>10*3600?7200:3600;const o=[];for(let t=0;t<=tmax;t+=step)o.push(t);return o}
+const charts=[];
+function chart(el,key,opts={}){
+  const sc=opts.scale||1; let vals=[];
+  for(const r of runs) vals=vals.concat(r.d.series.map(p=>p[key]).filter(v=>v!=null&&!Number.isNaN(v)).map(v=>v*sc));
+  let lo=opts.lo!=null?opts.lo:Math.min(...vals), hi=opts.hi!=null?opts.hi:Math.max(...vals); if(hi===lo)hi=lo+1;
+  const pad=(hi-lo)*0.08; if(opts.lo==null)lo-=pad; if(opts.hi==null)hi+=pad;
+  const y=v=>MT+(1-(v-lo)/(hi-lo))*(H-MT-MB);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${opts.aria||key}">`;
+  for(const v of ticks(lo,hi,4)) s+=`<line class="gridline" x1="${ML}" x2="${W-MR}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="${ML-8}" y="${y(v)+4}" text-anchor="end">${opts.tf?opts.tf(v):v}</text>`;
+  s+=`<line class="axisline" x1="${ML}" x2="${W-MR}" y1="${H-MB}" y2="${H-MB}"/>`;
+  for(const t of timeTicks()) s+=`<text class="tick" x="${x(t)}" y="${H-MB+16}" text-anchor="middle">${hms(t)}</text>`;
+  if(opts.ref!=null){ s+=`<line x1="${ML}" x2="${W-MR}" y1="${y(opts.ref)}" y2="${y(opts.ref)}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="5 4" opacity=".8"/><text class="endlabel" x="${W-MR+6}" y="${y(opts.ref)+4}">${opts.reflabel||''}</text>`; }
+  const ends=[];
+  for(const r of runs){
+    const pts=r.d.series.filter(p=>p[key]!=null&&!Number.isNaN(p[key])).map(p=>[x(p.t),y(p[key]*sc)]);
+    s+=`<path class="series" stroke="${r.color}" d="M`+pts.map(p=>`${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L')+`"/>`;
+    const last=pts[pts.length-1]; ends.push({r,last,v:r.d.series[r.d.series.length-1][key]*sc});
+  }
+  // end labels: nudge apart if they collide
+  ends.sort((p,q)=>p.last[1]-q.last[1]); for(let i=1;i<ends.length;i++){ if(ends[i].last[1]-ends[i-1].last[1]<13) ends[i].last=[ends[i].last[0], ends[i-1].last[1]+13]; }
+  for(const e of ends) s+=`<circle class="enddot" cx="${e.last[0]}" cy="${e.last[1]}" r="4" fill="${e.r.color}"/><text class="endlabel" x="${e.last[0]+8}" y="${e.last[1]+4}">${opts.ef?opts.ef(e.v):fmt(e.v,2)}</text>`;
+  s+=`<line class="xh" x1="0" x2="0" y1="${MT}" y2="${H-MB}"/><rect x="${ML}" y="${MT}" width="${W-ML-MR}" height="${H-MT-MB}" fill="transparent"/></svg>`;
+  el.innerHTML=s; charts.push({el,svg:el.querySelector('svg'),xh:el.querySelector('.xh'),key,sc,opts});
+}
+chart(document.getElementById('c-vbat'),'v_bat',{aria:'Pack voltage',tf:v=>v.toFixed(2),ef:v=>v.toFixed(3)+' V'});
+chart(document.getElementById('c-ichg'),'i_chg',{aria:'Charge current',scale:1e3,lo:0,tf:v=>Math.round(v),ef:v=>v.toFixed(0)+' mA'});
+chart(document.getElementById('c-pin'),'p_in',{aria:'Input power',scale:1e3,lo:0,tf:v=>Math.round(v),ef:v=>v.toFixed(0)+' mW'});
+chart(document.getElementById('c-soc'),'mah',{aria:'Cumulative charge delivered',lo:0,ref:REF_MAH,reflabel:'3200 mAh discharge',tf:v=>Math.round(v),ef:v=>v.toFixed(0)+' mAh'});
+chart(document.getElementById('c-eff'),'eff',{aria:'Efficiency',lo:0,hi:100,tf:v=>Math.round(v)+'%',ef:v=>v.toFixed(1)+' %'});
+
+// shared crosshair: hover tooltip on desktop, plus a printed readout under every
+// chart that follows the pointer/finger and can be PINNED with a tap or click
+// (hover does not exist on a phone). All charts show the same time point.
+const tip=document.getElementById('tip');
+const readouts=charts.map(c=>{const d=document.createElement('div');d.className='readout';d.innerHTML='<span class="hint">Move over the chart to read values; tap or click to pin a time point.</span>';c.el.after(d);return d});
+let pinned=null;
+function nearest(series,t){let lo=0,hi=series.length-1;while(lo<hi){const m=(lo+hi)>>1;if(series[m].t<t)lo=m+1;else hi=m}return series[lo]}
+function valuesAt(t){ return runs.map(run=>{ const s=run.d.series; const ended=s[s.length-1].t<t-600; const d=nearest(s,t); return {run,d,ended}; }); }
+function paintReadouts(t){
+  const vals=valuesAt(t);
+  readouts.forEach((ro,i)=>{
+    const c=charts[i]; const key=c.key, sc=c.sc||1;
+    ro.innerHTML=`<span class="t">t + ${hms(t)}</span>`+vals.map(({run,d,ended})=>{
+      const v=ended?'ended':(d[key]==null||Number.isNaN(d[key])?'—':(c.opts.ef?c.opts.ef(d[key]*sc):fmt(d[key]*sc,2)));
+      return `<span class="k" style="--kc:${run.color}">${run.name}: <span class="v">${v}</span></span>`;}).join('');
+    ro.classList.toggle('pinned',pinned!=null);
+  });
+}
+function setCrosshair(t){const cx=x(t);for(const k of charts){k.xh.setAttribute('x1',cx);k.xh.setAttribute('x2',cx);k.xh.style.display='block'}}
+function tAt(ev,c){const r=c.svg.getBoundingClientRect(),px=(ev.clientX-r.left)*(W/r.width);if(px<ML||px>W-MR)return null;return (px-ML)/(W-ML-MR)*tmax}
+function show(ev,c){
+  if(pinned!=null){return}
+  const t=tAt(ev,c); if(t==null){hide();return}
+  setCrosshair(t); paintReadouts(t);
+  if(ev.pointerType==='touch'){tip.style.display='none';return}
+  let html=`<div class="t">t + ${hms(t)}</div>`;
+  for(const {run,d,ended} of valuesAt(t)){ html+= ended?`<div class="row"><span style="--k:${run.color}">${run.name}</span><b>ended</b></div>`
+    :`<div class="row"><span style="--k:${run.color}">${run.name}</span><b>${fmt(d.v_bat,3)} V · ${fmt(d.i_chg*1e3,0)} mA · ${fmt(d.p_in*1e3,0)} mW · ${d.eff!=null?d.eff.toFixed(1)+' %':'—'}</b></div>`; }
+  tip.innerHTML=html; tip.style.display='block';
+  const cr=c.el.closest('.wrap').getBoundingClientRect(); let left=ev.clientX-cr.left+14, top=ev.clientY-cr.top+14; if(left+380>cr.width) left-=400; tip.style.left=left+'px'; tip.style.top=top+'px';
+}
+function hide(){ if(pinned!=null)return; tip.style.display='none'; for(const k of charts)k.xh.style.display='none'; }
+function togglePin(ev,c){
+  const t=tAt(ev,c); if(t==null)return;
+  if(pinned!=null){ pinned=null; tip.style.display='none'; setCrosshair(t); paintReadouts(t); return; }
+  pinned=t; tip.style.display='none'; setCrosshair(t); paintReadouts(t);
+}
+for(const c of charts){
+  c.svg.addEventListener('pointermove',e=>show(e,c));
+  c.svg.addEventListener('pointerleave',hide);
+  c.svg.addEventListener('click',e=>togglePin(e,c));
+}
+// initial readout at 10 h, a useful reference point
+setCrosshair(Math.min(10*3600,tmax)); paintReadouts(Math.min(10*3600,tmax));
+
+document.getElementById('n-same').innerHTML = [
+  'Same pack (protected LiFePO4, 3.2 Ah measured), same latched 0 V start, same emulated panel curve and fixture (B2902B CH1 replay, CH2 zero-burden ammeter, 34461A across the pack), same 20 mA / 5 min end-of-charge rule.',
+  'Both chargers unlatched the pack on the first sample and drew essentially the panel’s full available power throughout the constant-current phase (≈1.1 W at ≈6.1 V), so charge current was panel-limited on both boards.',
+  'Energy integrals skip logging gaps; efficiency is Wh into the pack ÷ Wh from the panel over the same logged intervals.',
+].map(t=>`<li>${t}</li>`).join('');
+document.getElementById('n-diff').innerHTML = [
+  'The LTC3130 run was stitched from three logs (two logger kills and an SMU power cycle; ~27 min of charging unlogged, ≈0.13 Ah not in its total). The LT3652 run is a single uninterrupted log.',
+  'Neither run exercises a precharge region: the LTC3130 has none, and the LT3652’s 300 mA precharge current exceeds what this panel can deliver, so its current was panel-limited from the start.',
+  'The emulated panel is a software compliance replay. It is faithful while a charger holds a steady operating point and hunts once the charger’s draw falls in CV; hunt rows are flagged REPLAY_HUNT and excluded from the “excl. hunt” efficiency. The LTC3130 run had ~4.1 h of hunting, the LT3652 run ~0.9 h.',
+  'The two boards’ float voltages differ (≈3.48 V vs ≈3.59 V), so “termination” lands at different pack voltages and the LT3652 delivers more Ah into the same pack.',
+].map(t=>`<li>${t}</li>`).join('');
+document.getElementById('foot').textContent = `Sources: ${A.source} (LTC3130, ${A.summary.samples.toLocaleString()} rows) and ${B.source} (LT3652, ${B.summary.samples.toLocaleString()} rows), each downsampled to ${A.series.length} points for the plots. Per-run reports carry the full run notes.`;
+})();
+</script>

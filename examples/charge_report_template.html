@@ -1,0 +1,257 @@
+<title>ON1006 Dead-Pack Recovery Charge</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --plane:#f6f6f2; --surface:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,.10);
+  --pack:#2a78d6; --panel:#eb6834; --eff:#1baf7a; --pack-wash:rgba(42,120,214,.10); --panel-wash:rgba(235,104,52,.10);
+  --good:#006300;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  color-scheme:dark;
+  --plane:#0e0e0d; --surface:#1a1a19; --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10);
+  --pack:#3987e5; --panel:#d95926; --eff:#199e70; --pack-wash:rgba(57,135,229,.14); --panel-wash:rgba(217,89,38,.14);
+  --good:#0ca30c;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --plane:#0e0e0d; --surface:#1a1a19; --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10);
+  --pack:#3987e5; --panel:#d95926; --eff:#199e70; --pack-wash:rgba(57,135,229,.14); --panel-wash:rgba(217,89,38,.14);
+  --good:#0ca30c;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--plane);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;padding-block:32px 56px;padding-inline:20px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+main{max-width:980px;margin:0 auto;display:grid;gap:28px}
+header h1{font-size:28px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px;text-wrap:balance}
+header p{margin:0;color:var(--ink-2);max-width:68ch}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.verdict{display:flex;gap:12px;align-items:flex-start;padding:16px 18px;background:var(--surface);border:1px solid var(--ring);border-radius:8px}
+.verdict .dot{width:12px;height:12px;border-radius:50%;background:var(--good);margin-top:6px;flex:none}
+.verdict strong{font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:14px 16px;display:grid;gap:2px;align-content:start}
+.tile .label{font-size:12.5px;color:var(--ink-2)}
+.tile .value{font-size:26px;font-weight:600;line-height:1.15}
+.tile.hero .value{font-size:44px}
+.tile .unit{font-size:14px;font-weight:500;color:var(--ink-2);margin-left:3px}
+.tile .note{font-size:12px;color:var(--muted)}
+.chart{background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:16px 16px 10px}
+.chart h2{font-size:15px;font-weight:600;margin:0 0 2px}
+.chart .sub{font-size:12.5px;color:var(--ink-2);margin:0 0 8px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);margin:0 0 6px}
+.legend span::before{content:"";display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:6px;border-radius:1px;background:var(--k)}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.gridline{stroke:var(--grid);stroke-width:1}
+.axisline{stroke:var(--axis);stroke-width:1}
+.tick{fill:var(--muted);font-size:11px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.series{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.wash{stroke:none}
+.endlabel{font-size:11.5px;fill:var(--ink-2);font-family:"IBM Plex Mono",ui-monospace,monospace}
+.enddot{stroke:var(--surface);stroke-width:2}
+.phase{fill:var(--ink);opacity:.035}
+.phaselabel{font-size:11px;fill:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.xh{stroke:var(--axis);stroke-width:1;display:none}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--ring);border-radius:6px;padding:8px 10px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.08);display:none;min-width:150px}
+.tip .t{color:var(--muted);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;margin-bottom:4px}
+.tip .row{display:flex;justify-content:space-between;gap:12px}
+.tip .row b{font-weight:600;font-variant-numeric:tabular-nums}
+.tip .row span{color:var(--ink-2)}
+.tip .row span::before{content:"";display:inline-block;width:10px;height:2px;vertical-align:middle;margin-right:6px;background:var(--k)}
+.wrap{position:relative}
+section.notes{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:8px;padding:16px 18px}
+.card h3{font-size:14px;font-weight:600;margin:0 0 8px}
+.card p,.card li{font-size:14px;color:var(--ink-2);margin:0}
+.card ul{margin:0;padding-left:18px;display:grid;gap:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--ink-2);font-weight:500}
+details summary{cursor:pointer;color:var(--ink-2);font-size:14px}
+.tablewrap{overflow-x:auto}
+footer{color:var(--muted);font-size:12.5px}
+@media (prefers-reduced-motion:no-preference){ .series{transition:opacity .15s} }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">Bench report · ON1006 rev LTC3130 · 2026-09-15</p>
+    <h1>Dead-Pack Recovery Charge</h1>
+    <p id="lede"></p>
+  </header>
+
+  <div class="verdict" id="verdict"><div class="dot"></div><div id="verdict-text"></div></div>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="chart wrap" id="c-bat">
+    <h2>Battery voltage and charge current</h2>
+    <p class="sub">Voltage at the pack terminals (34461A, direct) and current in the battery lead (B2902B CH2, zero-burden).</p>
+    <div class="legend"><span style="--k:var(--pack)">Pack voltage, V</span><span style="--k:var(--panel)">Charge current, mA</span></div>
+    <div id="svg-vbat"></div>
+    <div id="svg-ichg"></div>
+  </section>
+
+  <section class="chart wrap" id="c-in">
+    <h2>Power drawn from the emulated panel</h2>
+    <p class="sub" id="sub-pin"></p>
+    <div class="legend"><span style="--k:var(--panel)">Input power, mW</span><span style="--k:var(--muted)">Panel Pmax</span></div>
+    <div id="svg-pin"></div>
+  </section>
+
+  <section class="chart wrap" id="c-eff">
+    <h2>Charging efficiency</h2>
+    <p class="sub">Power into the battery divided by power from the panel, per sample.</p>
+    <div id="svg-eff"></div>
+  </section>
+
+  <section class="notes">
+    <div class="card"><h3>Phases</h3><table id="phases"></table></div>
+    <div class="card"><h3>Setup</h3>
+      <ul>
+        <li>Solar input: B2902B CH1 replaying the measured panel curve <span class="mono">panel-iv-2026-08-24_145423</span> (Voc 7.71 V, Isc 0.194 A, Pmax 1.098 W at 6.25 V). Level parked at Voc, compliance re-derived from the achieved voltage at ~10 Hz.</li>
+        <li>Battery current: CH2 in series with battery+, 0 V source, 3 A range, no clamp below the instrument maximum. Both channel LOW terminals floated (<span class="mono">:OUTP:LOW FLO</span>).</li>
+        <li>Battery voltage: Keysight 34461A directly across the pack, &gt;10 GΩ input.</li>
+        <li>Pack: protected LiFePO4, 1350 mAh, protection latched (terminals 0 V) at start. Board on power-floor firmware.</li>
+        <li>Sequence: solar on first, battery loop closed second. End of charge = current below 20 mA for 5 min.</li>
+      </ul>
+    </div>
+    <div class="card"><h3>Reading the numbers</h3>
+      <ul>
+        <li>Efficiency is the ratio of energies (Wh in ÷ Wh out), not an average of per-sample ratios.</li>
+        <li>Harvest fraction compares mean input power in the CC phase to the panel's measured Pmax — how much of the available power the MPPT actually took.</li>
+        <li>Charge current dips of ~100 mA lasting one sample are the charger's own bursts; input power is flat across them.</li>
+        <li>Charge Ah is what entered the pack from a latched 0 V start; it is not a capacity measurement.</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="card" id="runnotes" hidden><h3>Run notes</h3><ul id="runnotes-list"></ul></div>
+
+  <details class="card"><summary>Data table (downsampled)</summary><div class="tablewrap"><table id="datatable"></table></div></details>
+
+  <footer id="foot"></footer>
+</main>
+<div class="tip" id="tip"></div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function(){
+const doc = JSON.parse(document.getElementById('data').textContent);
+const S = doc.summary, D = doc.series;
+const fmt = (x,d=2)=> (x==null||Number.isNaN(x)) ? '—' : Number(x).toFixed(d);
+const hms = s => { const h=Math.floor(s/3600), m=Math.floor(s%3600/60); return h+'h '+String(m).padStart(2,'0')+'m'; };
+const pct = x => (x==null||Number.isNaN(x)) ? '—' : (x*100).toFixed(1)+' %';
+
+// --- headline ---------------------------------------------------------------
+const term = S.terminated_by_taper;
+document.getElementById('lede').textContent =
+  `${S.start_iso.slice(0,10)} · ${hms(S.duration_s)} · ${S.samples.toLocaleString()} samples at 2 s. ` +
+  `Pack started at ${fmt(S.v_bat_start,3)} V (protection latched), woke ${S.wake_t_s!=null? 'on the first sample':'—'}, ` +
+  `reached ${fmt(S.v_bat_max,3)} V.`;
+document.getElementById('verdict-text').innerHTML =
+  `<strong>${term ? 'Charge complete.' : 'Run ended before taper.'}</strong> ` +
+  `The LTC3130 board unlatched the 0 V pack immediately and charged it at the panel's maximum power. ` +
+  `Final current ${fmt(S.i_final_a*1e3,1)} mA ${term ? 'below the 20 mA termination floor' : '(termination floor 20 mA)'}; ` +
+  `${fmt(S.ah_in,3)} Ah / ${fmt(S.wh_bat,2)} Wh delivered at ${pct(S.eff_overall)} overall efficiency.`;
+if(!term) document.querySelector('.verdict .dot').style.background = 'var(--panel)';
+
+const tiles = [
+  {label:'Overall charging efficiency', value:pct(S.eff_overall), hero:true, note:`CC ${pct(S.eff_cc)} · CV ${pct(S.eff_cv)}`},
+  {label:'Charge delivered', value:fmt(S.ah_in,3), unit:'Ah', note:`${fmt(S.wh_bat,2)} Wh into the pack`},
+  {label:'Energy from panel', value:fmt(S.wh_in,2), unit:'Wh', note:`mean ${fmt(S.p_in_cc_w*1e3,0)} mW in CC`},
+  {label:'Harvest of panel Pmax', value:pct(S.harvest_fraction), note:`Pmax ${fmt(S.pmax_w*1e3,0)} mW at 6.25 V`},
+  {label:'CC plateau', value:fmt(S.i_plateau_a*1e3,0), unit:'mA', note:`for ${hms(S.cc_end_s)} (${pct(S.cc_fraction)} of run)`},
+  {label:'Pack voltage', value:fmt(S.v_bat_start,3)+' → '+fmt(S.v_bat_max,3), unit:'V', note:`final ${fmt(S.v_bat_final,3)} V`},
+];
+document.getElementById('tiles').innerHTML = tiles.map(t =>
+  `<div class="tile${t.hero?' hero':''}"><div class="label">${t.label}</div><div class="value">${t.value}${t.unit?`<span class="unit">${t.unit}</span>`:''}</div><div class="note">${t.note||''}</div></div>`).join('');
+
+document.getElementById('sub-pin').textContent =
+  `CH1 held at the operating point the charger chose: ${fmt(S.v1_cc,2)} V / ${fmt(S.i1_cc*1e3,0)} mA during CC — ${pct(S.harvest_fraction)} of the panel's measured maximum.`;
+
+// --- phases table ------------------------------------------------------------
+const cv_s = S.duration_s - S.cc_end_s;
+document.getElementById('phases').innerHTML =
+  `<tr><th>Phase</th><th>Duration</th><th>Current</th><th>Efficiency</th></tr>
+   <tr><td>Wake (0 V → first sample)</td><td>${S.wake_t_s!=null? fmt(S.wake_t_s,1)+' s':'—'}</td><td>—</td><td>—</td></tr>
+   <tr><td>Constant current (panel-limited)</td><td>${hms(S.cc_end_s)}</td><td>${fmt(S.i_plateau_a*1e3,0)} mA</td><td>${pct(S.eff_cc)}</td></tr>
+   <tr><td>Constant voltage / taper</td><td>${cv_s>60? hms(cv_s):'—'}</td><td>→ ${fmt(S.i_final_a*1e3,1)} mA</td><td>${pct(S.eff_cv)}</td></tr>`;
+
+// --- charts ------------------------------------------------------------------
+const W=940, H=220, ML=52, MR=64, MT=14, MB=30;
+const tmax = D[D.length-1].t;
+const x = t => ML + (t/tmax)*(W-ML-MR);
+function niceTicks(lo,hi,n){ const span=hi-lo||1; const raw=span/n; const p=Math.pow(10,Math.floor(Math.log10(raw))); const steps=[1,2,2.5,5,10]; let st=p; for(const s of steps){ if(raw/p<=s){st=s*p;break;} } const t0=Math.ceil(lo/st)*st; const out=[]; for(let v=t0; v<=hi+1e-9; v+=st) out.push(+v.toFixed(6)); return out; }
+function timeTicks(){ const step = tmax>4*3600? 3600 : tmax>3600? 1800 : 600; const out=[]; for(let t=0;t<=tmax;t+=step) out.push(t); return out; }
+const charts = [];
+function lineChart(el, key, color, wash, opts={}){
+  const sc = opts.scale||1;
+  const vals = D.map(d=>d[key]).filter(v=>v!=null && !Number.isNaN(v)).map(v=>v*sc);
+  let lo = opts.lo!=null? opts.lo : Math.min(...vals), hi = opts.hi!=null? opts.hi : Math.max(...vals);
+  if(opts.ref!=null){ hi=Math.max(hi,opts.ref); }
+  if(hi===lo){ hi=lo+1; }
+  const pad=(hi-lo)*0.08; if(opts.lo==null) lo-=pad; hi+=pad;
+  const y = v => MT + (1-(v-lo)/(hi-lo))*(H-MT-MB);
+  const yt = niceTicks(lo,hi,4);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${opts.aria||key}">`;
+  // phase shading: CV region
+  if(S.cc_end_s < tmax*0.98){ s += `<rect class="phase" x="${x(S.cc_end_s)}" y="${MT}" width="${x(tmax)-x(S.cc_end_s)}" height="${H-MT-MB}"/>`; s += `<text class="phaselabel" x="${x(S.cc_end_s)+6}" y="${MT+12}">taper</text>`; }
+  for(const v of yt){ s += `<line class="gridline" x1="${ML}" x2="${W-MR}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="${ML-8}" y="${y(v)+4}" text-anchor="end">${opts.tickfmt? opts.tickfmt(v): v}</text>`; }
+  s += `<line class="axisline" x1="${ML}" x2="${W-MR}" y1="${H-MB}" y2="${H-MB}"/>`;
+  for(const t of timeTicks()){ s += `<text class="tick" x="${x(t)}" y="${H-MB+16}" text-anchor="middle">${hms(t)}</text>`; }
+  const pts = D.filter(d=>d[key]!=null && !Number.isNaN(d[key])).map(d=>[x(d.t), y(d[key]*(opts.scale||1))]);
+  if(wash){ s += `<path class="wash" fill="${wash}" d="M${pts[0][0]},${H-MB} ` + pts.map(p=>`L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ') + ` L${pts[pts.length-1][0]},${H-MB}Z"/>`; }
+  if(opts.ref!=null){ s += `<line x1="${ML}" x2="${W-MR}" y1="${y(opts.ref)}" y2="${y(opts.ref)}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="none" opacity=".7"/><text class="endlabel" x="${W-MR+6}" y="${y(opts.ref)+4}">${opts.reflabel}</text>`; }
+  s += `<path class="series" stroke="${color}" d="M` + pts.map(p=>`${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L') + `"/>`;
+  const last = pts[pts.length-1], lastv = D[D.length-1][key]*(opts.scale||1);
+  s += `<circle class="enddot" cx="${last[0]}" cy="${last[1]}" r="4" fill="${color}"/><text class="endlabel" x="${last[0]+8}" y="${last[1]+4}">${opts.endfmt? opts.endfmt(lastv): fmt(lastv,2)}</text>`;
+  s += `<line class="xh" x1="0" x2="0" y1="${MT}" y2="${H-MB}"/><rect class="hit" x="${ML}" y="${MT}" width="${W-ML-MR}" height="${H-MT-MB}" fill="transparent"/></svg>`;
+  el.innerHTML = s;
+  charts.push({el, svg: el.querySelector('svg'), xh: el.querySelector('.xh')});
+}
+lineChart(document.getElementById('svg-vbat'), 'v_bat', 'var(--pack)', 'var(--pack-wash)', {aria:'Pack voltage over time', tickfmt:v=>v.toFixed(2), endfmt:v=>v.toFixed(3)+' V'});
+lineChart(document.getElementById('svg-ichg'), 'i_chg', 'var(--panel)', null, {aria:'Charge current over time', scale:1e3, lo:0, tickfmt:v=>Math.round(v), endfmt:v=>v.toFixed(0)+' mA'});
+lineChart(document.getElementById('svg-pin'), 'p_in', 'var(--panel)', 'var(--panel-wash)', {aria:'Input power over time', scale:1e3, lo:0, ref:S.pmax_w*1e3, reflabel:'Pmax '+Math.round(S.pmax_w*1e3)+' mW', tickfmt:v=>Math.round(v), endfmt:v=>v.toFixed(0)+' mW'});
+// efficiency series computed client-side
+for(const d of D){ d.eff = (d.p_in>0.01 && d.v_bat>0) ? (d.v_bat*d.i_chg)/d.p_in*100 : null; }
+lineChart(document.getElementById('svg-eff'), 'eff', 'var(--eff)', null, {aria:'Efficiency over time', lo:0, hi:100, tickfmt:v=>Math.round(v)+'%', endfmt:v=>v.toFixed(1)+' %'});
+
+// --- crosshair tooltip shared across charts ----------------------------------
+const tip = document.getElementById('tip');
+function nearest(t){ let lo=0, hi=D.length-1; while(lo<hi){ const m=(lo+hi)>>1; if(D[m].t<t) lo=m+1; else hi=m; } return D[lo]; }
+function show(ev, chart){
+  const r = chart.svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * (W / r.width);
+  if(px<ML||px>W-MR){ hide(); return; }
+  const t = (px-ML)/(W-ML-MR)*tmax; const d = nearest(t); const cx = x(d.t);
+  for(const c of charts){ c.xh.setAttribute('x1',cx); c.xh.setAttribute('x2',cx); c.xh.style.display='block'; }
+  const rows = [['var(--pack)','Pack voltage',fmt(d.v_bat,4)+' V'],['var(--panel)','Charge current',fmt(d.i_chg*1e3,1)+' mA'],['var(--panel)','Input power',fmt(d.p_in*1e3,0)+' mW'],['var(--muted)','Panel node',fmt(d.v1,3)+' V / '+fmt(d.i1*1e3,1)+' mA'],['var(--eff)','Efficiency',d.eff!=null? d.eff.toFixed(1)+' %':'—'],['var(--muted)','Delivered',fmt(d.ah,3)+' Ah']];
+  tip.innerHTML = `<div class="t">t + ${hms(d.t)} · ${d.iso.slice(11,19)}</div>` + rows.map(r=>`<div class="row"><span style="--k:${r[0]}">${r[1]}</span><b>${r[2]}</b></div>`).join('');
+  tip.style.display='block';
+  const cr = chart.el.closest('.wrap').getBoundingClientRect();
+  let left = ev.clientX - cr.left + 14, top = ev.clientY - cr.top + 14;
+  if(left + 190 > cr.width) left -= 210;
+  tip.style.left = left+'px'; tip.style.top = top+'px';
+}
+function hide(){ tip.style.display='none'; for(const c of charts) c.xh.style.display='none'; }
+for(const c of charts){ c.svg.addEventListener('pointermove', e=>show(e,c)); c.svg.addEventListener('pointerleave', hide); }
+
+// --- run notes (optional, from summary.notes) ---------------------------------
+if(Array.isArray(S.notes) && S.notes.length){
+  const ul = document.getElementById('runnotes-list');
+  for(const n of S.notes){ const li=document.createElement('li'); li.textContent=n; ul.appendChild(li); }
+  document.getElementById('runnotes').hidden = false;
+}
+
+// --- data table --------------------------------------------------------------
+const step = Math.max(1, Math.floor(D.length/60));
+document.getElementById('datatable').innerHTML = '<tr><th>Time</th><th>Pack V</th><th>Charge mA</th><th>Panel V</th><th>Panel mA</th><th>In mW</th><th>Eff %</th><th>Ah</th></tr>' +
+  D.filter((_,i)=>i%step===0 || i===D.length-1).map(d=>`<tr><td>${hms(d.t)}</td><td>${fmt(d.v_bat,3)}</td><td>${fmt(d.i_chg*1e3,0)}</td><td>${fmt(d.v1,2)}</td><td>${fmt(d.i1*1e3,0)}</td><td>${fmt(d.p_in*1e3,0)}</td><td>${d.eff!=null? d.eff.toFixed(1):'—'}</td><td>${fmt(d.ah,3)}</td></tr>`).join('');
+
+document.getElementById('foot').textContent = `Source: ${doc.source} (${S.samples.toLocaleString()} rows, downsampled to ${D.length} points for the plots). Flags seen: ${S.flags.length? S.flags.join(', '): 'none'}. Analysis: examples/analyze_charge_cycle.py.`;
+})();
+</script>

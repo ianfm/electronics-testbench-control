@@ -1,0 +1,2 @@
+duration_s,samples,final_v_bat,max_v_bat,ah_in,wh_bat,wh_solar,eff_overall,cv_transition_est_s,stop_reason
+35710.2,17856,3.47507952,3.47511022,1.9225779255365818,6.561476921934053,7.698352911364839,0.8523221781957475,600.168689250946,CHARGE_COMPLETE: i_chg < 0.02 A sustained for 5.0 min (armed at V_bat >= 3.4 V)

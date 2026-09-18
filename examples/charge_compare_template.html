@@ -1,9 +1,9 @@
 <title>ON1006 Charger Comparison</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-:root{color-scheme:light;--plane:#f6f6f2;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--ring:rgba(11,11,11,.10);--a:#2a78d6;--b:#eb6834;--a-wash:rgba(42,120,214,.10);--b-wash:rgba(235,104,52,.10)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--plane:#0e0e0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);--a:#3987e5;--b:#d95926;--a-wash:rgba(57,135,229,.14);--b-wash:rgba(217,89,38,.14)}}
-:root[data-theme="dark"]{color-scheme:dark;--plane:#0e0e0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);--a:#3987e5;--b:#d95926;--a-wash:rgba(57,135,229,.14);--b-wash:rgba(217,89,38,.14)}
+:root{color-scheme:light;--plane:#f6f6f2;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--ring:rgba(11,11,11,.10);--a:#2a78d6;--b:#eb6834;--c:#1baf7a;--a-wash:rgba(42,120,214,.10);--b-wash:rgba(235,104,52,.10);--c-wash:rgba(27,175,122,.10)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--plane:#0e0e0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);--a:#3987e5;--b:#d95926;--c:#199e70;--a-wash:rgba(57,135,229,.14);--b-wash:rgba(217,89,38,.14);--c-wash:rgba(25,158,112,.14)}}
+:root[data-theme="dark"]{color-scheme:dark;--plane:#0e0e0d;--surface:#1a1a19;--ink:#fff;--ink-2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.10);--a:#3987e5;--b:#d95926;--c:#199e70;--a-wash:rgba(57,135,229,.14);--b-wash:rgba(217,89,38,.14);--c-wash:rgba(25,158,112,.14)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--plane);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;padding-block:32px 56px;padding-inline:20px}
 main{max-width:980px;margin:0 auto;display:grid;gap:26px}
@@ -45,9 +45,9 @@ footer{color:var(--muted);font-size:12.5px}
 </style>
 <main>
   <header>
-    <p class="eyebrow">Bench comparison · ON1006 · 2026-09-15 to 2026-09-17</p>
+    <p class="eyebrow">Bench comparison · ON1006 · 2026-09-15 to 2026-09-18</p>
     <h1>LTC3130 vs LT3652 Charger</h1>
-    <p>Two ON1006 boards, identical fixture and pack: the LTC3130 revision and the original LT3652 revision, each charging the same protection-latched LiFePO4 pack from 0 V terminals to termination against the same measured panel curve (Voc 7.71 V, Isc 0.194 A, Pmax 1.10 W).</p>
+    <p>Two ON1006 boards, identical fixture and pack: the LTC3130 revision (two full cycles) and the original LT3652 revision (one), each charging the same protection-latched LiFePO4 pack from 0 V terminals to termination against the same measured panel curve (Voc 7.71 V, Isc 0.194 A, Pmax 1.10 W).</p>
   </header>
 
   <section class="card"><h2>Summary</h2><div class="tablewrap"><table id="summary"></table></div></section>
@@ -68,10 +68,11 @@ footer{color:var(--muted);font-size:12.5px}
 <div class="tip" id="tip"></div>
 <script id="data-a" type="application/json">__DATA_A__</script>
 <script id="data-b" type="application/json">__DATA_B__</script>
+<script id="data-c" type="application/json">__DATA_C__</script>
 <script>
 (function(){
-const A = JSON.parse(document.getElementById('data-a').textContent), B = JSON.parse(document.getElementById('data-b').textContent);
-const runs = [{k:'a', name:'LTC3130 (rev 1.2.x)', d:A, color:'var(--a)'}, {k:'b', name:'LT3652 (original)', d:B, color:'var(--b)'}];
+const A = JSON.parse(document.getElementById('data-a').textContent), B = JSON.parse(document.getElementById('data-b').textContent), C = JSON.parse(document.getElementById('data-c').textContent);
+const runs = [{k:'a', name:'LTC3130 run 1', d:A, color:'var(--a)'}, {k:'b', name:'LT3652 (original)', d:B, color:'var(--b)'}, {k:'c', name:'LTC3130 run 2', d:C, color:'var(--c)'}];
 const fmt=(x,d=2)=>(x==null||Number.isNaN(x))?'—':Number(x).toFixed(d);
 const pct=x=>(x==null||Number.isNaN(x))?'—':(x*100).toFixed(1)+' %';
 const hms=s=>{const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h+'h '+String(m).padStart(2,'0')+'m'};
@@ -88,7 +89,7 @@ for(const r of runs){ for(const p of r.d.series){
   if(r.k===GAP.k){ if(p.t>=GAP.t1) ah+=GAP.ah; else if(p.t>GAP.t0) ah+=GAP.ah*(p.t-GAP.t0)/(GAP.t1-GAP.t0); }
   p.mah = ah*1e3;
 } }
-document.getElementById('soc-sub').textContent = `Coulomb count of the logged charge current. The LTC3130 curve includes ~${GAP.ah*1e3} mAh charged during its unlogged 18:38–19:05 stretch. The dashed reference is the ${REF_MAH} mAh the pack returned in the earlier discharge test, drawn for scale only.`;
+document.getElementById('soc-sub').textContent = `Coulomb count of the logged charge current. The LTC3130 run 1 curve includes ~${GAP.ah*1e3} mAh charged during its unlogged 18:38–19:05 stretch; run 2 and the LT3652 run were logged without interruption. The dashed reference is the ${REF_MAH} mAh the pack returned in the earlier discharge test, drawn for scale only.`;
 document.getElementById('lg1').innerHTML = runs.map(r=>`<span style="--k:${r.color}">${r.name}</span>`).join('');
 
 // summary table
@@ -195,15 +196,16 @@ setCrosshair(Math.min(10*3600,tmax)); paintReadouts(Math.min(10*3600,tmax));
 
 document.getElementById('n-same').innerHTML = [
   'Same pack (protected LiFePO4, 3.2 Ah measured), same latched 0 V start, same emulated panel curve and fixture (B2902B CH1 replay, CH2 zero-burden ammeter, 34461A across the pack), same 20 mA / 5 min end-of-charge rule.',
-  'Both chargers unlatched the pack on the first sample and drew essentially the panel’s full available power throughout the constant-current phase (≈1.1 W at ≈6.1 V), so charge current was panel-limited on both boards.',
+  'All three runs unlatched the pack on the first sample and drew essentially the panel’s full available power throughout the constant-current phase (≈1.1 W at ≈6.1 V), so charge current was panel-limited on both boards.',
   'Energy integrals skip logging gaps; efficiency is Wh into the pack ÷ Wh from the panel over the same logged intervals.',
 ].map(t=>`<li>${t}</li>`).join('');
 document.getElementById('n-diff').innerHTML = [
-  'The LTC3130 run was stitched from three logs (two logger kills and an SMU power cycle; ~27 min of charging unlogged, ≈0.13 Ah not in its total). The LT3652 run is a single uninterrupted log.',
+  'LTC3130 run 1 was stitched from three logs (two logger kills and an SMU power cycle; ~27 min of charging unlogged, ≈0.13 Ah not in its logged total). LTC3130 run 2 and the LT3652 run are single uninterrupted logs.',
+  'Repeatability: the two LTC3130 cycles agree on plateau current (281 vs 282 mA), constant-current efficiency (86.1 % both), and peak pack voltage (3.475 V both). Run 2 ended 1.1 h sooner and logged 3.51 Ah against run 1’s 3.26 Ah logged + 0.13 Ah unlogged.',
   'Neither run exercises a precharge region: the LTC3130 has none, and the LT3652’s 300 mA precharge current exceeds what this panel can deliver, so its current was panel-limited from the start.',
-  'The emulated panel is a software compliance replay. It is faithful while a charger holds a steady operating point and hunts once the charger’s draw falls in CV; hunt rows are flagged REPLAY_HUNT and excluded from the “excl. hunt” efficiency. The LTC3130 run had ~4.1 h of hunting, the LT3652 run ~0.9 h.',
+  'The emulated panel is a software compliance replay. It is faithful while a charger holds a steady operating point and hunts once the charger’s draw falls in CV; hunt rows are flagged REPLAY_HUNT and excluded from the “excl. hunt” efficiency. LTC3130 run 1 had ~4.1 h of hunting, run 2 ~1.2 h, the LT3652 run ~0.9 h.',
   'The two boards’ float voltages differ (≈3.48 V vs ≈3.59 V), so “termination” lands at different pack voltages and the LT3652 delivers more Ah into the same pack.',
 ].map(t=>`<li>${t}</li>`).join('');
-document.getElementById('foot').textContent = `Sources: ${A.source} (LTC3130, ${A.summary.samples.toLocaleString()} rows) and ${B.source} (LT3652, ${B.summary.samples.toLocaleString()} rows), each downsampled to ${A.series.length} points for the plots. Per-run reports carry the full run notes.`;
+document.getElementById('foot').textContent = `Sources: ${A.source} (LTC3130 run 1, ${A.summary.samples.toLocaleString()} rows), ${B.source} (LT3652, ${B.summary.samples.toLocaleString()} rows) and ${C.source} (LTC3130 run 2, ${C.summary.samples.toLocaleString()} rows), each downsampled to ${A.series.length} points for the plots. Per-run reports carry the full run notes.`;
 })();
 </script>

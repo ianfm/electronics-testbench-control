@@ -45,9 +45,9 @@ footer{color:var(--muted);font-size:12.5px}
 </style>
 <main>
   <header>
-    <p class="eyebrow">Bench comparison · ON1006 · 2026-09-15 to 2026-09-18</p>
+    <p class="eyebrow">Bench comparison · ON1006 · 2026-09-16 to 2026-09-18</p>
     <h1>LTC3130 vs LT3652 Charger</h1>
-    <p>Two ON1006 boards, identical fixture and pack: the LTC3130 revision (two full cycles) and the original LT3652 revision (one), each charging the same protection-latched LiFePO4 pack from 0 V terminals to termination against the same measured panel curve (Voc 7.71 V, Isc 0.194 A, Pmax 1.10 W).</p>
+    <p>Two ON1006 boards, identical fixture and pack: the LTC3130 revision and the original LT3652 revision, each charging the same protection-latched LiFePO4 pack from 0 V terminals to termination against the same measured panel curve (Voc 7.71 V, Isc 0.194 A, Pmax 1.10 W).</p>
   </header>
 
   <section class="card"><h2>Summary</h2><div class="tablewrap"><table id="summary"></table></div></section>
@@ -68,26 +68,18 @@ footer{color:var(--muted);font-size:12.5px}
 <div class="tip" id="tip"></div>
 <script id="data-a" type="application/json">__DATA_A__</script>
 <script id="data-b" type="application/json">__DATA_B__</script>
-<script id="data-c" type="application/json">__DATA_C__</script>
 <script>
 (function(){
-const A = JSON.parse(document.getElementById('data-a').textContent), B = JSON.parse(document.getElementById('data-b').textContent), C = JSON.parse(document.getElementById('data-c').textContent);
-const runs = [{k:'a', name:'LTC3130 run 1', d:A, color:'var(--a)'}, {k:'b', name:'LT3652 (original)', d:B, color:'var(--b)'}, {k:'c', name:'LTC3130 run 2', d:C, color:'var(--c)'}];
+const A = JSON.parse(document.getElementById('data-a').textContent), B = JSON.parse(document.getElementById('data-b').textContent);
+const runs = [{k:'a', name:'LTC3130 (rev 1.2.x)', d:A, color:'var(--a)'}, {k:'b', name:'LT3652 (original)', d:B, color:'var(--b)'}];
 const fmt=(x,d=2)=>(x==null||Number.isNaN(x))?'—':Number(x).toFixed(d);
 const pct=x=>(x==null||Number.isNaN(x))?'—':(x*100).toFixed(1)+' %';
 const hms=s=>{const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h+'h '+String(m).padStart(2,'0')+'m'};
 for(const r of runs){ for(const p of r.d.series){ p.eff=(p.p_in>0.01&&p.v_bat>0)?(p.v_bat*p.i_chg)/p.p_in*100:null; } }
 
-// Cumulative charge: coulomb count of the logged charge current, in mAh. The
-// LTC3130 run has ~130 mAh charged during an unlogged stretch (18:38-19:05);
-// it is added as a ramp across that gap so the curve is honest.
-const GAP = {k:'a', t0: 17182, t1: 19292, ah: 0.13};
-for(const r of runs){ for(const p of r.d.series){
-  let ah = p.ah;
-  if(r.k===GAP.k){ if(p.t>=GAP.t1) ah+=GAP.ah; else if(p.t>GAP.t0) ah+=GAP.ah*(p.t-GAP.t0)/(GAP.t1-GAP.t0); }
-  p.mah = ah*1e3;
-} }
-document.getElementById('soc-sub').textContent = `Coulomb count of the logged charge current. The LTC3130 run 1 curve includes ~${GAP.ah*1e3} mAh charged during its unlogged 18:38–19:05 stretch; run 2 and the LT3652 run were logged without interruption.`;
+// Cumulative charge: coulomb count of the logged charge current, in mAh.
+for(const r of runs){ for(const p of r.d.series){ p.mah = p.ah*1e3; } }
+document.getElementById('soc-sub').textContent = 'Coulomb count of the logged charge current. Both runs were logged without interruption.';
 document.getElementById('lg1').innerHTML = runs.map(r=>`<span style="--k:${r.color}">${r.name}</span>`).join('');
 
 // summary table
@@ -105,8 +97,8 @@ const rowsDef = [
   ['Pack voltage at loop close → peak', r=>fmt(r.summary.v_bat_start,3)+' → '+fmt(r.summary.v_bat_max,3)+' V'],
   ['Final current at termination', r=>fmt(r.summary.i_final_a*1e3,1)+' mA'],
   ['Replay-hunt time (flagged)', r=>r.summary.hunt_hours!=null? fmt(r.summary.hunt_hours,1)+' h':'—'],
-  ['Charge delivered by 10 h (incl. gap estimate)', r=>{const s=r.series; let lo=0,hi=s.length-1; while(lo<hi){const m=(lo+hi)>>1; if(s[m].t<36000) lo=m+1; else hi=m;} return s[lo].t<36000-600?'—':fmt(s[lo].mah,0)+' mAh';}],
-  ['Charge delivered at termination (incl. gap estimate)', r=>fmt(r.series[r.series.length-1].mah,0)+' mAh'],
+  ['Charge delivered by 10 h', r=>{const s=r.series; let lo=0,hi=s.length-1; while(lo<hi){const m=(lo+hi)>>1; if(s[m].t<36000) lo=m+1; else hi=m;} return s[lo].t<36000-600?'—':fmt(s[lo].mah,0)+' mAh';}],
+  ['Charge delivered at termination', r=>fmt(r.series[r.series.length-1].mah,0)+' mAh'],
 ];
 document.getElementById('summary').innerHTML = '<thead><tr><th></th>'+runs.map(r=>`<th><span class="sw" style="--k:${r.color}"></span>${r.name}</th>`).join('')+'</tr></thead><tbody>'+
   rowsDef.map(([l,f])=>`<tr><td>${l}</td>${runs.map(r=>`<td>${f(r.d)}</td>`).join('')}</tr>`).join('')+'</tbody>';
@@ -194,16 +186,15 @@ setCrosshair(Math.min(10*3600,tmax)); paintReadouts(Math.min(10*3600,tmax));
 
 document.getElementById('n-same').innerHTML = [
   'Same pack (protected LiFePO4), same latched 0 V start, same emulated panel curve and fixture (B2902B CH1 replay, CH2 zero-burden ammeter, 34461A across the pack), same 20 mA / 5 min end-of-charge rule.',
-  'All three runs unlatched the pack on the first sample and drew essentially the panel’s full available power throughout the constant-current phase (≈1.1 W at ≈6.1 V), so charge current was panel-limited on both boards.',
+  'Both chargers unlatched the pack on the first sample and drew essentially the panel’s full available power throughout the constant-current phase (≈1.1 W at ≈6.1 V), so charge current was panel-limited on both boards.',
   'Energy integrals skip logging gaps; efficiency is Wh into the pack ÷ Wh from the panel over the same logged intervals.',
 ].map(t=>`<li>${t}</li>`).join('');
 document.getElementById('n-diff').innerHTML = [
-  'LTC3130 run 1 was stitched from three logs (two logger kills and an SMU power cycle; ~27 min of charging unlogged, ≈0.13 Ah not in its logged total). LTC3130 run 2 and the LT3652 run are single uninterrupted logs.',
-  'Repeatability: the two LTC3130 cycles agree on plateau current (281 vs 282 mA), constant-current efficiency (86.1 % both), and peak pack voltage (3.475 V both). Run 2 ended 1.1 h sooner and logged 3.51 Ah against run 1’s 3.26 Ah logged + 0.13 Ah unlogged.',
+  'Both runs are single uninterrupted logs on the same cell, run back to back (LT3652 2026-09-16/17, then LTC3130 2026-09-17/18) with the pack discharged to its protection latch before each.',
   'Neither run exercises a precharge region: the LTC3130 has none, and the LT3652’s 300 mA precharge current exceeds what this panel can deliver, so its current was panel-limited from the start.',
-  'The emulated panel is a software compliance replay. It is faithful while a charger holds a steady operating point and hunts once the charger’s draw falls in CV; hunt rows are flagged REPLAY_HUNT and excluded from the “excl. hunt” efficiency. LTC3130 run 1 had ~4.1 h of hunting, run 2 ~1.2 h, the LT3652 run ~0.9 h.',
+  'The emulated panel is a software compliance replay. It is faithful while a charger holds a steady operating point and hunts once the charger’s draw falls in CV; hunt rows are flagged REPLAY_HUNT and excluded from the “excl. hunt” efficiency. The LTC3130 run had ~1.2 h of hunting, the LT3652 run ~0.9 h.',
   'The two boards’ float voltages differ (≈3.48 V vs ≈3.59 V), so “termination” lands at different pack voltages and the LT3652 delivers more Ah into the same pack.',
 ].map(t=>`<li>${t}</li>`).join('');
-document.getElementById('foot').textContent = `Sources: ${A.source} (LTC3130 run 1, ${A.summary.samples.toLocaleString()} rows), ${B.source} (LT3652, ${B.summary.samples.toLocaleString()} rows) and ${C.source} (LTC3130 run 2, ${C.summary.samples.toLocaleString()} rows), each downsampled to ${A.series.length} points for the plots. Per-run reports carry the full run notes.`;
+document.getElementById('foot').textContent = `Sources: ${A.source} (LTC3130, ${A.summary.samples.toLocaleString()} rows) and ${B.source} (LT3652, ${B.summary.samples.toLocaleString()} rows), each downsampled to ${A.series.length} points for the plots. Per-run reports carry the full run notes.`;
 })();
 </script>

@@ -80,16 +80,14 @@ for(const r of runs){ for(const p of r.d.series){ p.eff=(p.p_in>0.01&&p.v_bat>0)
 
 // Cumulative charge: coulomb count of the logged charge current, in mAh. The
 // LTC3130 run has ~130 mAh charged during an unlogged stretch (18:38-19:05);
-// it is added as a ramp across that gap so the curve is honest. The pack's
-// measured 3200 mAh discharge is drawn as a reference line only.
-const REF_MAH = 3200;
+// it is added as a ramp across that gap so the curve is honest.
 const GAP = {k:'a', t0: 17182, t1: 19292, ah: 0.13};
 for(const r of runs){ for(const p of r.d.series){
   let ah = p.ah;
   if(r.k===GAP.k){ if(p.t>=GAP.t1) ah+=GAP.ah; else if(p.t>GAP.t0) ah+=GAP.ah*(p.t-GAP.t0)/(GAP.t1-GAP.t0); }
   p.mah = ah*1e3;
 } }
-document.getElementById('soc-sub').textContent = `Coulomb count of the logged charge current. The LTC3130 run 1 curve includes ~${GAP.ah*1e3} mAh charged during its unlogged 18:38–19:05 stretch; run 2 and the LT3652 run were logged without interruption. The dashed reference is the ${REF_MAH} mAh the pack returned in the earlier discharge test, drawn for scale only.`;
+document.getElementById('soc-sub').textContent = `Coulomb count of the logged charge current. The LTC3130 run 1 curve includes ~${GAP.ah*1e3} mAh charged during its unlogged 18:38–19:05 stretch; run 2 and the LT3652 run were logged without interruption.`;
 document.getElementById('lg1').innerHTML = runs.map(r=>`<span style="--k:${r.color}">${r.name}</span>`).join('');
 
 // summary table
@@ -146,7 +144,7 @@ function chart(el,key,opts={}){
 chart(document.getElementById('c-vbat'),'v_bat',{aria:'Pack voltage',tf:v=>v.toFixed(2),ef:v=>v.toFixed(3)+' V'});
 chart(document.getElementById('c-ichg'),'i_chg',{aria:'Charge current',scale:1e3,lo:0,tf:v=>Math.round(v),ef:v=>v.toFixed(0)+' mA'});
 chart(document.getElementById('c-pin'),'p_in',{aria:'Input power',scale:1e3,lo:0,tf:v=>Math.round(v),ef:v=>v.toFixed(0)+' mW'});
-chart(document.getElementById('c-soc'),'mah',{aria:'Cumulative charge delivered',lo:0,ref:REF_MAH,reflabel:'3200 mAh discharge',tf:v=>Math.round(v),ef:v=>v.toFixed(0)+' mAh'});
+chart(document.getElementById('c-soc'),'mah',{aria:'Cumulative charge delivered',lo:0,tf:v=>Math.round(v),ef:v=>v.toFixed(0)+' mAh'});
 chart(document.getElementById('c-eff'),'eff',{aria:'Efficiency',lo:0,hi:100,tf:v=>Math.round(v)+'%',ef:v=>v.toFixed(1)+' %'});
 
 // shared crosshair: hover tooltip on desktop, plus a printed readout under every
@@ -195,7 +193,7 @@ for(const c of charts){
 setCrosshair(Math.min(10*3600,tmax)); paintReadouts(Math.min(10*3600,tmax));
 
 document.getElementById('n-same').innerHTML = [
-  'Same pack (protected LiFePO4, 3.2 Ah measured), same latched 0 V start, same emulated panel curve and fixture (B2902B CH1 replay, CH2 zero-burden ammeter, 34461A across the pack), same 20 mA / 5 min end-of-charge rule.',
+  'Same pack (protected LiFePO4), same latched 0 V start, same emulated panel curve and fixture (B2902B CH1 replay, CH2 zero-burden ammeter, 34461A across the pack), same 20 mA / 5 min end-of-charge rule.',
   'All three runs unlatched the pack on the first sample and drew essentially the panel’s full available power throughout the constant-current phase (≈1.1 W at ≈6.1 V), so charge current was panel-limited on both boards.',
   'Energy integrals skip logging gaps; efficiency is Wh into the pack ÷ Wh from the panel over the same logged intervals.',
 ].map(t=>`<li>${t}</li>`).join('');

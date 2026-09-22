@@ -1,10 +1,12 @@
 # Preliminary findings — charging a dead pack from emulated solar (2026-09-14)
 
-**Status: run still in progress (overnight). These are observations from the first ~7 minutes, not conclusions.**
+**Superseded.** This is the chronological bench log from the diagnostic phase (2026-09-14/15), kept for the record. The "circuit problem" conclusion in the cross-check section below was wrong; the root cause was the fixture (SMU LOW terminals grounded), as the section after it explains. The measured results are in the per-run reports and the comparison in this directory: `charge_report_ltc3130_rerun.html` (LTC3130), `charge_report_lt3652_recovery.html` (LT3652), `charge_report_comparison.html` (A/B). `charge_report_recovery_deadpack.html` is the first LTC3130 cycle, stitched from three logs, and is not part of the comparison.
+
+**Status at time of writing: run still in progress (overnight). These are observations from the first ~7 minutes, not conclusions.**
 
 ## Setup
 - DUT: solar MPPT charger board, power-floor firmware (all loads off).
-- Battery: real protected LiFePO4 pack, 1350 mAh, 3.3 V nominal. Over-discharged; protection FET latched open → terminals read 0 V.
+- Battery: real protected LiFePO4 pack, 3.3 V nominal. Over-discharged; protection FET latched open → terminals read 0 V.
 - Solar input: B2902B CH1 replaying the measured panel curve `panel-iv-2026-08-24_145423` (Voc 7.71 V, Isc 0.193 A, Pmax 1.10 W at 6.25 V). Source parked at Voc, compliance re-derived from achieved voltage continuously — the charger sets the operating point.
 - Battery current: B2902B CH2 in series with battery+, 0 V source (zero-burden ammeter), 3 A range, no effective compliance (3 A instrument max). V_bat: 34461A directly across the pack.
 - Sequence: solar on first, battery loop second.

@@ -169,8 +169,26 @@ def discover_instruments(
 
     try:
         if config.use_cache:
-            for resource in _load_cached_resources(config.cache_path, report):
+            cached_resources = _load_cached_resources(config.cache_path, report)
+            for resource in cached_resources:
                 _probe_once(resource, "cache", rm, config, report, probed)
+            
+            if cached_resources:
+                all_cached_ok = True
+                cached_probed_count = 0
+                for attempt in report.attempts:
+                    if attempt.source == "cache":
+                        cached_probed_count += 1
+                        if attempt.outcome == "failed":
+                            all_cached_ok = False
+                            break
+                if all_cached_ok and cached_probed_count == len(cached_resources):
+                    if owns_rm:
+                        try:
+                            rm.close()
+                        except Exception:
+                            pass
+                    return report
 
         try:
             resources = rm.list_resources(config.visa_filter)

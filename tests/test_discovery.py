@@ -116,6 +116,38 @@ class LayeredDiscoveryTests(unittest.TestCase):
 
         self.assertEqual(loaded, ["TCPIP::192.0.2.1::INSTR"])
 
+    def test_discover_instruments_uses_cache_fast_path(self) -> None:
+        cached_resource = "TCPIP::192.0.2.1::INSTR"
+        rm = FakeResourceManager(
+            {
+                cached_resource: "Vendor,Model,SERIAL,1.0",
+            },
+            enumerated=(),
+        )
+        
+        with tempfile.TemporaryDirectory() as tempdir:
+            cache_path = Path(tempdir) / "cache.json"
+            report = DiscoveryReport()
+            report.record(
+                cached_resource,
+                "visa",
+                identity=DeviceIdentity.parse("Vendor,Model,SERIAL,1.0"),
+            )
+            _save_cache(cache_path, report)
+            
+            config = DiscoveryConfig(
+                use_cache=True,
+                cache_path=cache_path,
+                scan_network=True,
+                query_attempts=1,
+            )
+            
+            with patch("testbench.discovery.service._scan_open_ports", side_effect=RuntimeError("Should not scan subnet!")):
+                result_report = discover_instruments(config, resource_manager=rm)
+                
+            self.assertEqual(len(result_report.identified_devices), 1)
+            self.assertEqual(result_report.identified_devices[0].identity.model, "Model")
+
 
 if __name__ == "__main__":
     unittest.main()

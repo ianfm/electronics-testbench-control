@@ -1,0 +1,16 @@
+{
+    "target": 3.5,
+    "delta": 0.02,
+    "parallel_delta": 0.015,
+    "sim": false,
+    "interval": 5.0,
+    "mode": "parallel",
+    "max_voltage": 3.65,
+    "max_current": 3.2,
+    "max_cell_current": 1.2,
+    "batches": "4/4",
+    "ocv_interval": 300.0,
+    "monitor": false,
+    "headroom": 0.15,
+    "termination_current": 0.05
+}

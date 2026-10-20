@@ -172,9 +172,10 @@ class BalancerAppTests(unittest.TestCase):
             )
 
         # 3. Simulate one of the active cells under charge reaching target voltage (3.60V)
-        # In under-charge measurement, it should trigger OCV on the next step
+        # Set a low current limit to satisfy CV absorption termination criteria
         app.batch1.active_cells = [1]
         app.batch1.status = "CHARGING"
+        app.batch1.current_set = 0.04
         with patch.object(app, 'measure_cell_voltages', return_value=[3.60] + [3.20]*7) as mock_measure:
             with patch.object(app, 'print_dashboard'):
                 app.step()
@@ -217,14 +218,14 @@ class BalancerAppTests(unittest.TestCase):
         app = BalancerApp(simulated=True, monitor=True)
         # Verify that in monitor mode:
         # 1. step() returns False (always continues monitoring)
-        # 2. measure_cell_voltages is called with open_circuit=False
+        # 2. measure_cell_voltages is called with open_circuit=True
         with patch.object(app, 'measure_cell_voltages', return_value=[3.20] * 8) as mock_measure:
             with patch.object(app, 'print_dashboard') as mock_print:
                 completed = app.step()
                 self.assertFalse(completed)
                 mock_measure.assert_has_calls([
-                    call(app.batch1, open_circuit=False),
-                    call(app.batch2, open_circuit=False)
+                    call(app.batch1, open_circuit=True),
+                    call(app.batch2, open_circuit=True)
                 ])
                 mock_print.assert_called_once_with([3.20]*16)
         
@@ -233,6 +234,179 @@ class BalancerAppTests(unittest.TestCase):
         self.assertEqual(app.batch1.charge_mode, "OFF")
         self.assertEqual(app.batch1.active_cells, [])
         self.assertEqual(app.batch1.current_reading, 0.0)
+
+    def test_connection_error_fallback_to_simulation(self) -> None:
+        app = BalancerApp(simulated=False)
+        with patch('routines.m300_battery_balancer.discover_instruments') as mock_discover:
+            mock_discover.side_effect = RuntimeError("Could not connect to VISA address")
+            with patch('time.sleep'):  # prevent waiting 2 seconds in test
+                app.connect()
+        self.assertTrue(app.simulated)
+        self.assertEqual(app.connection_error, "Could not connect to VISA address")
+
+    def test_cc_cv_absorption_termination(self) -> None:
+        import time
+        app = BalancerApp(simulated=True, target_voltage=3.50, termination_current=0.05)
+        # Setup batch 1: cell 1 is charging and near target, current is low (0.04A)
+        app.batch1.status = "CHARGING"
+        app.batch1.active_cells = [1]
+        app.batch1.current_reading = 0.04
+        
+        # We run a step with need_ocv=False (so we don't trigger OCV, meaning it's an under-charge step)
+        app.trigger_ocv_next = False
+        app.last_ocv_time = time.time()
+        
+        with patch.object(app, 'print_dashboard'):
+            with patch.object(app, 'measure_cell_voltages', return_value=[3.49] + [3.3]*7):
+                app.step()
+                
+        # Cell 1 should be marked completed
+        self.assertIn(1, app.batch1.completed_cells)
+        self.assertTrue(app.trigger_ocv_next)
+
+    def test_run_interactive_wizard_exit_immediately(self) -> None:
+        from routines.m300_battery_balancer import run_interactive_wizard
+        defaults = {
+            "target": 3.50,
+            "delta": 0.02,
+            "parallel_delta": 0.01,
+            "sim": False,
+            "interval": 5.0,
+            "mode": "parallel",
+            "max_voltage": 3.65,
+            "max_current": 3.2,
+            "max_cell_current": 1.2,
+            "batches": "4/4",
+            "ocv_interval": 30.0,
+            "monitor": False,
+            "headroom": 0.15,
+            "termination_current": 0.05,
+            "log_dir": "logs",
+        }
+        with patch('builtins.input', side_effect=['G']):
+            res = run_interactive_wizard(defaults)
+        self.assertEqual(res, defaults)
+
+    def test_cv_absorption_regulation_high_current(self) -> None:
+        import time
+        app = BalancerApp(simulated=False, target_voltage=3.50, headroom=0.15, termination_current=0.05)
+        # Setup batch 1: cell 1 is charging and reaches target voltage (3.52V), but current is high (1.0A)
+        app.batch1.status = "CHARGING"
+        app.batch1.charge_mode = "ABSORPTION"
+        app.batch1.active_cells = [1]
+        app.batch1.current_set = 1.2
+        app.batch1.voltage_set = 3.65
+        
+        app.psu = MagicMock()
+        app.psu.get_current.return_value = 1.0
+        app.psu.get_voltage.return_value = 3.65
+        
+        app.trigger_ocv_next = False
+        app.last_ocv_time = time.time()
+        
+        with patch.object(app, 'print_dashboard'):
+            with patch.object(app, 'measure_cell_voltages', return_value=[3.52] + [3.3]*7):
+                app.step()
+                
+        # Cell 1 should NOT be completed because current is 1.0A (> 0.05A)
+        self.assertNotIn(1, app.batch1.completed_cells)
+        # OCV check should NOT be triggered
+        self.assertFalse(app.trigger_ocv_next)
+        # Voltage setpoint should be dynamically adjusted/trimmed down from 3.65V
+        # Expected:
+        # Base v_set: 3.50 + 0.15 * (1.0/1.2) = 3.625V
+        # Overshoot: 3.52 - 3.50 = 0.02V
+        # Feedback trimmed: v_set - overshoot = 3.625 - 0.02 = 3.605V
+        self.assertAlmostEqual(app.batch1.voltage_set, 3.605)
+        app.psu.set_voltage.assert_called_once_with(1, 3.605)
+
+    def test_no_relaxation_trips_during_active_charging(self) -> None:
+        import time
+        app = BalancerApp(simulated=True, target_voltage=3.50, balance_delta=0.02, parallel_delta=0.01)
+        # Setup batch 1: cell 1 is active charging, cell 2 is completed, cell 3 is idle/disconnected
+        app.batch1.status = "CHARGING"
+        app.batch1.active_cells = [1]
+        app.batch1.completed_cells = [2]
+        app.batch1.current_reading = 1.0
+        app.batch1.current_set = 1.0
+        
+        app.trigger_ocv_next = False
+        app.last_ocv_time = time.time()
+        
+        # Mock measurements during active charging:
+        # - Cell 1 (active) is at terminal voltage 3.48V
+        # - Cell 2 (completed) has relaxed to 3.45V (< target_voltage - balance_delta = 3.48V)
+        # - Cell 3 (idle) has relaxed to 3.40V (< active cell terminal voltage 3.48V - parallel_delta)
+        # In the active charging step, these relaxations should NOT trigger OCV next.
+        with patch.object(app, 'print_dashboard'):
+            with patch.object(app, 'measure_cell_voltages', return_value=[3.48, 3.45, 3.40] + [3.3]*5):
+                app.step()
+                
+        self.assertFalse(app.trigger_ocv_next)
+        # Cell 2 should remain in completed_cells (de-completion only happens during OCV steps)
+        self.assertIn(2, app.batch1.completed_cells)
+
+    def test_csv_telemetry_logging(self) -> None:
+        import os
+        import tempfile
+        import csv
+        
+        # Create a temporary directory for logging
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = BalancerApp(simulated=True, log_dir=tmpdir)
+            app.connect()
+            app.init_logging()
+            
+            # Verify the log file was created
+            self.assertIsNotNone(app.log_file)
+            self.assertTrue(os.path.exists(app.log_path))
+            
+            # Run a step (which will trigger write_log_entry)
+            with patch.object(app, 'print_dashboard'):
+                app.step()
+                
+            # Close the log to flush the files
+            app.close_logging()
+            
+            # Read and verify the contents of the log file
+            with open(app.log_path, "r", newline="") as f:
+                reader = list(csv.reader(f))
+                
+            # Total columns = 1 (timestamp) + 4 (b1 settings) + 4 (b2 settings) + 16 (v cells) + 16 (i cells) + 16 (ir cells) + 16 (ah cells) = 73
+            self.assertEqual(len(reader[0]), 73)
+            self.assertEqual(reader[0][0], "timestamp")
+            self.assertEqual(reader[0][9], "v_cell_01")
+            self.assertEqual(reader[0][24], "v_cell_16")
+            self.assertEqual(reader[0][25], "i_cell_01")
+            self.assertEqual(reader[0][40], "i_cell_16")
+            self.assertEqual(reader[0][41], "ir_cell_01")
+            self.assertEqual(reader[0][56], "ir_cell_16")
+            self.assertEqual(reader[0][57], "ah_cell_01")
+            self.assertEqual(reader[0][72], "ah_cell_16")
+            
+            # Verify one data row is written containing the expected columns
+            self.assertEqual(len(reader), 2)
+            row = reader[1]
+            self.assertEqual(len(row), 73)
+            self.assertEqual(row[1], "CHARGING")
+
+    def test_dashboard_vu_meters_and_ansi_formatting(self) -> None:
+        import io
+        import sys
+        app = BalancerApp(simulated=True)
+        # Capture stdout to verify dashboard output
+        stdout_capture = io.StringIO()
+        old_stdout = sys.stdout
+        try:
+            sys.stdout = stdout_capture
+            app.print_dashboard([3.20] * 16)
+        finally:
+            sys.stdout = old_stdout
+            
+        output = stdout_capture.getvalue()
+        self.assertIn("PSU V:", output)
+        self.assertIn("PSU I:", output)
+        self.assertIn("OFF", output)
 
 
 if __name__ == "__main__":

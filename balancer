@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Balancer - Runner script for M300 Battery Balancer
+
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Check if the virtual environment exists
+if [ ! -d "$SCRIPT_DIR/.venv" ]; then
+    echo "Error: Virtual environment (.venv) not found in $SCRIPT_DIR" >&2
+    echo "Please set up the project by running: python3 -m venv .venv && .venv/bin/pip install -e ." >&2
+    exit 1
+fi
+
+# Run the battery balancer routine using the venv python interpreter
+exec "$SCRIPT_DIR/.venv/bin/python" "$SCRIPT_DIR/routines/m300_battery_balancer.py" "$@"
